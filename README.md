@@ -1,5 +1,23 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## UX Acceptance: 5-Second Boss Test
+
+The dashboard is considered acceptable only if a dealer principal can answer all of the following in under 5 seconds:
+
+- Are we ahead or behind?
+- What is the dollar gap?
+- How much can we recover today?
+- What are the top 3 issues?
+- Who owns the issues?
+- What should happen before end of day?
+
+### Pass Criteria
+
+- Answers are visible above the fold in the primary summary view.
+- No scrolling required for first-pass understanding.
+- No chart/table interpretation required to answer the six core questions.
+- If any answer requires reading deep tables, scrolling, or chart interpretation first, redesign that section.
+
 ## Getting Started
 
 First, run the development server:
