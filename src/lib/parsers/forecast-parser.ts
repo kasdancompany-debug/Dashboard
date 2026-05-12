@@ -68,19 +68,16 @@ export function parseForecastSheet(rows: SheetMatrix, sourceSheet: string) {
 
     if (!metric || ["total", "totals", "summary", "overall"].includes(metric.toLowerCase())) continue;
 
-    const actual = readNumeric(
-      cells,
-      ["actual", "actuals", "mtd actual", "gross actual"],
-      [row[2] ?? "", row[1] ?? ""],
-    );
+    const actual =
+      readNumeric(cells, ["actual", "actuals", "mtd actual", "gross actual"], [row[2] ?? "", row[1] ?? ""]) ?? 0;
     const forecast = readNumeric(
       cells,
       ["forecast", "budget", "target", "mtd forecast", "gross forecast"],
       [row[1] ?? "", row[2] ?? ""],
     );
 
-    if (actual === null || forecast === null || forecast === 0) {
-      issues.push(`Row ${i + 1}: unable to parse actual/forecast for "${metric}".`);
+    if (forecast === null || forecast === 0) {
+      issues.push(`Row ${i + 1}: unable to parse forecast/target for "${metric}".`);
       continue;
     }
 

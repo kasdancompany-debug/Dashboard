@@ -28,7 +28,7 @@ export function BestWorstTracking({ bestTrackingLine, worstTrackingLine, classNa
           {bestTrackingLine ? (
             <>
               <p className="mt-2 text-[24px] font-semibold text-white">
-                {bestTrackingLine.department} · {bestTrackingLine.label}
+                {bestTrackingLine.label} – {bestTrackingLine.department}
               </p>
               <div className="mt-2 space-y-1 text-[13px] text-[#A1A1AA]">
                 <p>
@@ -53,7 +53,7 @@ export function BestWorstTracking({ bestTrackingLine, worstTrackingLine, classNa
           {worstTrackingLine ? (
             <>
               <p className="mt-2 text-[24px] font-semibold text-white">
-                {worstTrackingLine.department} · {worstTrackingLine.label}
+                {worstTrackingLine.label} – {worstTrackingLine.department}
               </p>
               <div className="mt-2 space-y-1 text-[13px] text-[#A1A1AA]">
                 <p>

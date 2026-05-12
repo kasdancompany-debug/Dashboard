@@ -41,6 +41,10 @@ function signedMoney(value: number | null) {
   return value >= 0 ? `+${abs}` : `-${abs}`;
 }
 
+function trackingLineHeadline(line: { label: string; department: MonthlyGrossDepartment }) {
+  return `${line.label} – ${line.department}`;
+}
+
 function gapTone(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "text-[#A1A1AA]";
   return value >= 0 ? "text-[#34D399]" : "text-[#FB7185]";
@@ -479,9 +483,9 @@ export function LiveDashboardViewV2() {
           <ExecSection>
             <SectionHeader
               title="Expanded insights"
-              subtitle="Line gaps, department totals, and short signals when you need another pass."
+              subtitle="Worst and best tracking lines across Sales, Service, and Parts (targets from the forecast tab when row names match)."
             />
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
               <article
                 className={cn(
                   "rounded-xl border border-white/[0.07] p-4 ring-1 ring-inset ring-white/[0.04]",
@@ -489,14 +493,14 @@ export function LiveDashboardViewV2() {
                   worst ? deptLineSignalTheme(worst.department).surface : "bg-black/20",
                 )}
               >
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-rose-200/90">Biggest problem area</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-rose-200/90">Worst tracking line</p>
                 <p className="mt-2 text-[15px] font-semibold text-white">
-                  {worst ? `${worst.department} · ${worst.label}` : "Needs Setup"}
+                  {worst ? trackingLineHeadline(worst) : "Needs Setup"}
                 </p>
-                <p className="mt-1 text-[16px] font-semibold text-rose-300">
+                <p className={cn("mt-1 text-[16px] font-semibold", gapTone(worst?.gapToTarget ?? null))}>
                   {worst?.gapToTarget === null || worst?.gapToTarget === undefined
                     ? "Needs Setup"
-                    : `-${money(Math.abs(worst.gapToTarget))} vs target`}
+                    : `${signedMoney(worst.gapToTarget)} vs target`}
                 </p>
               </article>
               <article
@@ -506,48 +510,14 @@ export function LiveDashboardViewV2() {
                   best ? deptLineSignalTheme(best.department).surface : "bg-black/20",
                 )}
               >
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200/90">Strongest area</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200/90">Best tracking line</p>
                 <p className="mt-2 text-[15px] font-semibold text-white">
-                  {best ? `${best.department} · ${best.label}` : "Needs Setup"}
+                  {best ? trackingLineHeadline(best) : "Needs Setup"}
                 </p>
-                <p className="mt-1 text-[16px] font-semibold text-emerald-300">
+                <p className={cn("mt-1 text-[16px] font-semibold", gapTone(best?.gapToTarget ?? null))}>
                   {best?.gapToTarget === null || best?.gapToTarget === undefined
                     ? "Needs Setup"
-                    : `+${money(Math.abs(best.gapToTarget))} vs target`}
-                </p>
-              </article>
-              <article
-                className={cn(
-                  "rounded-xl border border-white/[0.07] p-4 ring-1 ring-inset ring-white/[0.04]",
-                  worstDepartmentTotal ? deptLineSignalTheme(worstDepartmentTotal.department).rail : "",
-                  worstDepartmentTotal ? deptLineSignalTheme(worstDepartmentTotal.department).surface : "bg-black/20",
-                )}
-              >
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Department gap</p>
-                <p className="mt-2 text-[15px] font-semibold text-white">
-                  {worstDepartmentTotal ? worstDepartmentTotal.department : "Needs Setup"}
-                </p>
-                <p className={cn("mt-1 text-[16px] font-semibold", gapTone(worstDepartmentTotal?.gapToTarget ?? null))}>
-                  {worstDepartmentTotal?.gapToTarget === null || worstDepartmentTotal?.gapToTarget === undefined
-                    ? "Needs Setup"
-                    : `${signedMoney(worstDepartmentTotal.gapToTarget)} vs target`}
-                </p>
-              </article>
-              <article
-                className={cn(
-                  "rounded-xl border border-white/[0.07] p-4 ring-1 ring-inset ring-white/[0.04]",
-                  bestDepartmentTotal ? deptLineSignalTheme(bestDepartmentTotal.department).rail : "",
-                  bestDepartmentTotal ? deptLineSignalTheme(bestDepartmentTotal.department).surface : "bg-black/20",
-                )}
-              >
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Top department</p>
-                <p className="mt-2 text-[15px] font-semibold text-white">
-                  {bestDepartmentTotal ? bestDepartmentTotal.department : "Needs Setup"}
-                </p>
-                <p className={cn("mt-1 text-[16px] font-semibold", gapTone(bestDepartmentTotal?.gapToTarget ?? null))}>
-                  {bestDepartmentTotal?.gapToTarget === null || bestDepartmentTotal?.gapToTarget === undefined
-                    ? "Needs Setup"
-                    : `${signedMoney(bestDepartmentTotal.gapToTarget)} vs target`}
+                    : `${signedMoney(best.gapToTarget)} vs target`}
                 </p>
               </article>
             </div>

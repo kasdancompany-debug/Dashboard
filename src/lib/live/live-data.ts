@@ -10,11 +10,13 @@ import {
   type LivePipelineMeta,
 } from "@/src/lib/data-pipeline/source-trace";
 import { fetchSheetRows, isLiveDataEnabled } from "@/src/lib/google/sheets-client";
+import { parseForecastSheet, type ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import { parsePartsSheetForMonth } from "@/src/lib/parsers/parts-parser";
 import { parseSalesSheetForMonth } from "@/src/lib/parsers/sales-parser";
 import { parseServiceSheetForMonth } from "@/src/lib/parsers/service-parser";
 import { partitionFormulaDiagnostics } from "@/src/lib/parsers/parse-utils";
 import { PartsSummary, SalesSummary, ServiceAdvisorPerformance, ServiceSummary } from "@/src/lib/types/dealership";
+import { resolveDepartmentForecastTotal } from "@/src/lib/velocity/monthly-gross/forecast-line-targets";
 import { sources } from "@/src/lib/velocity/source-config";
 
 function safeNumber(value: unknown, fallback = 0) {
@@ -121,6 +123,8 @@ export type LiveDataset = {
   daysUsed: number;
   daysAvailable: number;
   forecastTargets: { Sales: number; Service: number; Parts: number };
+  /** Parsed forecast-tab rows (metric / actual / forecast) when the forecast sheet is aligned; used for line targets in monthly gross. */
+  forecastLineItems: ForecastTrendItem[] | null;
   pipeline: LivePipelineMeta;
 };
 
@@ -173,6 +177,13 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
   if (forecastExcluded && sources.forecast.required) {
     excludedReasons.push(`Forecast excluded from totals: missing ${selectedMonthLabel} source data.`);
   }
+
+  const forecastParsed =
+    !forecastExcluded && forecast.rows.length > 0
+      ? parseForecastSheet(forecast.rows, forecast.tabName ?? "forecast")
+      : null;
+  const forecastLineItems: ForecastTrendItem[] | null =
+    forecastParsed && forecastParsed.data.length > 0 ? forecastParsed.data : null;
 
   const sourceHealth = buildSourceHealthPayload(
     reportingMonth,
@@ -293,12 +304,21 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
       monthAligned: forecastValidation.monthAligned,
       excluded: forecastExcluded,
       exclusionReason: forecastExcluded ? exclusionMessage(forecastValidation.extractedSheetMonthKey ?? null, reportingMonth) : null,
-      rawParsedTotals: {
-        totalActual: null,
-        totalForecast: null,
-        variance: null,
-      },
-      warnings: forecastValidation.warning ? [forecastValidation.warning] : [],
+      rawParsedTotals: forecastParsed
+        ? {
+            totalActual: forecastParsed.summary.totalActual,
+            totalForecast: forecastParsed.summary.totalForecast,
+            variance: forecastParsed.summary.variance,
+          }
+        : {
+            totalActual: null,
+            totalForecast: null,
+            variance: null,
+          },
+      warnings: [
+        ...(forecastValidation.warning ? [forecastValidation.warning] : []),
+        ...(forecastParsed?.dataQualityIssues ?? []).slice(0, 8),
+      ],
     },
   ];
 
@@ -336,9 +356,12 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     ? { ...partsParsed.summaries, gross: { customer: 0, warranty: 0, internal: 0, total: 0 } }
     : partsParsed.summaries;
   const forecastTargets = {
-    Sales: salesTopSummary.targetGross ?? 0,
-    Service: safeNumber(serviceParsed.summaries.forecast),
-    Parts: safeNumber(partsParsed.summaries.forecast),
+    Sales:
+      resolveDepartmentForecastTotal("Sales", forecastLineItems ?? undefined) ?? safeNumber(salesTopSummary.targetGross),
+    Service:
+      resolveDepartmentForecastTotal("Service", forecastLineItems ?? undefined) ?? safeNumber(serviceParsed.summaries.forecast),
+    Parts:
+      resolveDepartmentForecastTotal("Parts", forecastLineItems ?? undefined) ?? safeNumber(partsParsed.summaries.forecast),
   };
   sourceHealth.staleDataWarnings = [...new Set([...sourceHealth.staleDataWarnings, ...excludedReasons])];
 
@@ -453,6 +476,7 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
       return deriveDaysFromRows(sales.rows, year, month);
     })(),
     forecastTargets,
+    forecastLineItems,
     pipeline,
   };
 }

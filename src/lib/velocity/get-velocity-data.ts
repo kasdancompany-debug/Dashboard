@@ -237,6 +237,7 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
       Service: normalized.forecastTargets.Service,
       Parts: normalized.forecastTargets.Parts,
     },
+    forecastLineItems: normalized.forecastLineItems ?? undefined,
   });
 
   return {

@@ -12,6 +12,10 @@ type SignalDot = "ok" | "warn" | "bad" | "neutral";
 
 type DeptKey = "Sales" | "Service" | "Parts";
 
+function trackingLineHeadline(line: { label: string; department: string }) {
+  return `${line.label} – ${line.department}`;
+}
+
 export type MeetingModePayload = {
   monthTitle: string;
   lastSyncedLabel: string;
@@ -315,16 +319,13 @@ function buildDepartmentBullets(p: MeetingModePayload): string[] {
 }
 
 function buildRiskStrengthBullets(p: MeetingModePayload): string[] {
-  const { worst, best, worstDepartmentTotal } = p;
+  const { worst, best } = p;
   const lines: string[] = [];
   if (worst?.label) {
-    lines.push(`${worst.department} · ${worst.label}: gap ${signedMoney(worst.gapToTarget)} vs line target.`);
+    lines.push(`${trackingLineHeadline(worst)} — largest gap (${signedMoney(worst.gapToTarget)} vs line target).`);
   }
   if (best?.label) {
-    lines.push(`${best.department} · ${best.label}: strongest line (${signedMoney(best.gapToTarget)} vs target).`);
-  }
-  if (worstDepartmentTotal?.department) {
-    lines.push(`${worstDepartmentTotal.department} department needs attention (${signedMoney(worstDepartmentTotal.gapToTarget)} vs dept target).`);
+    lines.push(`${trackingLineHeadline(best)} — best tracking line (${signedMoney(best.gapToTarget)} vs line target).`);
   }
   return lines.slice(0, 4);
 }
@@ -569,7 +570,7 @@ function SplitLinePanel({
       <div className="relative flex min-h-0 flex-1 flex-col">
         <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-stone-500">{title}</p>
         <p className="mt-1 font-serif text-base font-semibold leading-snug text-stone-950 md:text-lg">
-          {line.department} · {line.label}
+          {trackingLineHeadline(line)}
         </p>
         <p className={cn("mt-2 font-mono text-xl font-semibold tabular-nums md:text-2xl", gapPresentationClass(gap))}>{signedMoney(gap)}</p>
         <div className="mt-3 flex flex-1 flex-col justify-end space-y-2 border-t border-stone-200/70 pt-2.5">

@@ -1,5 +1,7 @@
 import type { SalesDeal } from "@/src/lib/types/dealership";
+import type { ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import type { SourceHealth } from "@/src/lib/velocity/engine/types";
+import { resolveDepartmentForecastTotal, resolveForecastTargetForLine } from "@/src/lib/velocity/monthly-gross/forecast-line-targets";
 import type {
   BestWorstTrackingLine,
   DepartmentGrossTracking,
@@ -49,6 +51,8 @@ export type MonthlyGrossEngineInput = {
   sourceHealth?: SourceHealth;
   sourceLineage?: Array<{ source: "sales" | "service" | "parts" | "forecast"; monthAligned: boolean; excluded: boolean; warnings: string[] }>;
   targets?: Partial<Record<MonthlyGrossDepartment, number>>;
+  /** When set, line-level targets prefer matching metrics from the forecast workbook tab. */
+  forecastLineItems?: ForecastTrendItem[] | null;
 };
 
 function safe(value: number | null | undefined) {
@@ -236,6 +240,17 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
   const reliableFromLineage = (source: typeof salesLineage) =>
     Boolean(source && !source.excluded && source.monthAligned);
 
+  const fc = input.forecastLineItems;
+
+  function lineForecastTarget(department: MonthlyGrossDepartment, label: string, modeledFallback: number): number {
+    const hit = resolveForecastTargetForLine(department, label, fc);
+    return hit !== null && Number.isFinite(hit) && hit > 0 ? hit : modeledFallback;
+  }
+
+  const salesTarget =
+    resolveDepartmentForecastTotal("Sales", fc) ??
+    (safe(input.sales.summary?.targetGross) || safe(input.targets?.Sales));
+
   const monthlySalesDeals = input.sales.data.filter((deal) => {
     const d = new Date(deal.date);
     return d.getFullYear() === year && d.getMonth() + 1 === month;
@@ -248,7 +263,6 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
   const salesTotalGrossFromDeals = monthlySalesDeals.reduce((sum, d) => sum + safe(d.totalGross), 0);
   const salesTotalGross = safe(input.sales.summary?.actualGross) || salesTotalGrossFromDeals;
   const grossPerCopy = monthlySalesDeals.length > 0 ? salesTotalGross / monthlySalesDeals.length : null;
-  const salesTarget = safe(input.sales.summary?.targetGross) || safe(input.targets?.Sales);
 
   const salesLines: GrossLineTracking[] = [
     toLine({
@@ -256,59 +270,59 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Sales",
       label: "New Vehicle Gross",
       actualGross: salesNewGross,
-      targetGross: salesTarget * 0.45,
+      targetGross: lineForecastTarget("Sales", "New Vehicle Gross", salesTarget * 0.45),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
       source: "Parsed sales deals",
-      explanation: "New-vehicle contribution against monthly run-rate target.",
+      explanation: "New-vehicle gross vs forecast row when matched; otherwise modeled share of department target.",
     }),
     toLine({
       id: "sales-used-gross",
       department: "Sales",
       label: "Used Vehicle Gross",
       actualGross: salesUsedGross,
-      targetGross: salesTarget * 0.55,
+      targetGross: lineForecastTarget("Sales", "Used Vehicle Gross", salesTarget * 0.55),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
       source: "Parsed sales deals",
-      explanation: "Used-vehicle contribution against monthly run-rate target.",
+      explanation: "Used-vehicle gross vs forecast row when matched; otherwise modeled share of department target.",
     }),
     toLine({
       id: "sales-front-gross",
       department: "Sales",
       label: "Front Gross",
       actualGross: salesFrontGross,
-      targetGross: salesTarget * 0.65,
+      targetGross: lineForecastTarget("Sales", "Front Gross", salesTarget * 0.65),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
       source: "Parsed sales deals",
-      explanation: "Front-end gross tracking relative to modeled target share.",
+      explanation: "Front-end gross vs forecast row when the metric name matches; otherwise modeled share of department target.",
     }),
     toLine({
       id: "sales-back-gross",
       department: "Sales",
       label: "Back Gross",
       actualGross: salesBackGross,
-      targetGross: salesTarget * 0.35,
+      targetGross: lineForecastTarget("Sales", "Back Gross", salesTarget * 0.35),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
       source: "Parsed sales deals",
-      explanation: "Back-end gross tracking relative to modeled target share.",
+      explanation: "Back-end gross vs forecast row when matched; otherwise modeled share of department target.",
     }),
     toLine({
       id: "sales-total-gross",
       department: "Sales",
       label: "Total Gross",
       actualGross: salesTotalGross,
-      targetGross: salesTarget,
+      targetGross: lineForecastTarget("Sales", "Total Gross", salesTarget),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
@@ -337,14 +351,15 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     );
   }
 
-  const serviceTarget = safe(input.targets?.Service);
+  const serviceTarget =
+    resolveDepartmentForecastTotal("Service", fc) ?? safe(input.targets?.Service);
   const serviceLines: GrossLineTracking[] = [
     toLine({
       id: "service-customer-gross",
       department: "Service",
       label: "Customer Gross",
       actualGross: safe(input.service.summary.gross.customer),
-      targetGross: serviceTarget * 0.5,
+      targetGross: lineForecastTarget("Service", "Customer Gross", serviceTarget * 0.5),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
@@ -357,7 +372,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Service",
       label: "Warranty Gross",
       actualGross: safe(input.service.summary.gross.warranty),
-      targetGross: serviceTarget * 0.25,
+      targetGross: lineForecastTarget("Service", "Warranty Gross", serviceTarget * 0.25),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
@@ -370,7 +385,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Service",
       label: "Internal Gross",
       actualGross: safe(input.service.summary.gross.internal),
-      targetGross: serviceTarget * 0.25,
+      targetGross: lineForecastTarget("Service", "Internal Gross", serviceTarget * 0.25),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
@@ -383,7 +398,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Service",
       label: "Total Service Gross",
       actualGross: safe(input.service.summary.gross.total),
-      targetGross: serviceTarget,
+      targetGross: lineForecastTarget("Service", "Total Service Gross", serviceTarget),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
@@ -419,14 +434,15 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     );
   }
 
-  const partsTarget = safe(input.targets?.Parts);
+  const partsTarget =
+    resolveDepartmentForecastTotal("Parts", fc) ?? safe(input.targets?.Parts);
   const partsLines: GrossLineTracking[] = [
     toLine({
       id: "parts-customer-gross",
       department: "Parts",
       label: "Customer Gross",
       actualGross: safe(input.parts.summary.gross.customer),
-      targetGross: partsTarget * 0.5,
+      targetGross: lineForecastTarget("Parts", "Customer Gross", partsTarget * 0.5),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
@@ -439,7 +455,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Parts",
       label: "Warranty Gross",
       actualGross: safe(input.parts.summary.gross.warranty),
-      targetGross: partsTarget * 0.2,
+      targetGross: lineForecastTarget("Parts", "Warranty Gross", partsTarget * 0.2),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
@@ -452,7 +468,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Parts",
       label: "Internal Gross",
       actualGross: safe(input.parts.summary.gross.internal),
-      targetGross: partsTarget * 0.3,
+      targetGross: lineForecastTarget("Parts", "Internal Gross", partsTarget * 0.3),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
@@ -465,7 +481,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       department: "Parts",
       label: "Total Parts Gross",
       actualGross: safe(input.parts.summary.gross.total),
-      targetGross: partsTarget,
+      targetGross: lineForecastTarget("Parts", "Total Parts Gross", partsTarget),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
@@ -526,7 +542,16 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     departmentFromLines("Parts", partsLines),
   ];
 
-  const allLines = departments.flatMap((d) => d.lines).filter((line) => line.gapToTarget !== null);
+  const EXCLUDE_FROM_BEST_WORST = new Set([
+    "sales-gross-per-copy",
+    "service-cp-labour",
+    "parts-wholesale-gross",
+    "parts-gog-gross",
+  ]);
+
+  const allLines = departments
+    .flatMap((d) => d.lines)
+    .filter((line) => line.gapToTarget !== null && !EXCLUDE_FROM_BEST_WORST.has(line.id));
   const bestTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (b.gapToTarget ?? 0) - (a.gapToTarget ?? 0))[0]);
   const worstTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (a.gapToTarget ?? 0) - (b.gapToTarget ?? 0))[0]);
 
