@@ -103,12 +103,121 @@ export type ProfitLeakDecision = {
   department: Department;
   severity: Severity;
   dollarImpact: number | null;
-  owner: string;
+  ownerRole: string;
   recommendedAction: string;
   reason: string;
   confidence: Confidence;
   title: string;
 };
+
+/** Sales pipeline at-risk row used inside the velocity engine. */
+export type VelocityAtRiskDeal = {
+  department: Department;
+  severity: Severity;
+  dollarImpact: number | null;
+  ownerRole: string;
+  recommendedAction: string;
+  reason: string;
+  confidence: Confidence;
+  dealId: string;
+  customer: string;
+  vehicle: string;
+  salesperson: string;
+  manager: string;
+  businessManager: string;
+  frontGross: number;
+  backGross: number;
+  totalGross: number;
+  riskScore: number;
+  estimatedRecoverableGross: number;
+};
+
+export type DepartmentHealthDecision = {
+  department: Department;
+  severity: Severity;
+  dollarImpact: number | null;
+  ownerRole: string;
+  recommendedAction: string;
+  reason: string;
+  confidence: Confidence;
+  status: HealthStatus;
+  score: number;
+  summary: string;
+  actual: number;
+  target: number;
+  pacePercent: number;
+};
+
+export type ProjectedCloseDecision = {
+  department: Department;
+  severity: Severity;
+  dollarImpact: number | null;
+  ownerRole: string;
+  recommendedAction: string;
+  reason: string;
+  confidence: Confidence;
+  projectedGross: number;
+  targetGross: number;
+  gapToTarget: number;
+  daysRemaining: number;
+};
+
+export type PrimaryThreatDecision = {
+  department: Department;
+  severity: Severity;
+  dollarImpact: number | null;
+  ownerRole: string;
+  recommendedAction: string;
+  reason: string;
+  confidence: Confidence;
+  title: string;
+};
+
+export type AccountabilityDecision = {
+  department: Department;
+  severity: Severity;
+  dollarImpact: number | null;
+  ownerRole: string;
+  recommendedAction: string;
+  reason: string;
+  confidence: Confidence;
+  person: string;
+  role: string;
+  issueCount: number;
+  topIssue: string;
+};
+
+export type ActionQueueDecision = ProfitLeakDecision | AccountabilityDecision;
+
+export type RankedActionQueueDecision = ActionQueueDecision & {
+  title: string;
+  priority: number;
+};
+
+export type MeetingBriefingDecision = {
+  headline: string;
+  currentStatus: string;
+  priorities: RankedActionQueueDecision[];
+  risks: ProfitLeakDecision[];
+  opportunities: DepartmentHealthDecision[];
+};
+
+export type DataConfidenceDecision = {
+  department: Department;
+  severity: Severity;
+  dollarImpact: number | null;
+  ownerRole: string;
+  recommendedAction: string;
+  reason: string;
+  confidence: Confidence;
+  score: number;
+  classification: "healthy" | "warning" | "unreliable";
+  label: "High confidence" | "Medium confidence" | "Low confidence";
+  estimated: boolean;
+  estimationReason: string | null;
+};
+
+export type VelocitySourceHealth = SourceHealth;
 
 export type AccountabilityItem = {
   person: string;
@@ -150,14 +259,6 @@ export type TrendSignal = {
   direction: "up" | "down" | "flat";
 };
 
-export type MeetingBriefing = {
-  headline: string;
-  currentStatus: string;
-  priorities: ActionQueueItem[];
-  risks: ProfitLeakDecision[];
-  opportunities: DepartmentPulse[];
-};
-
 export type DataConfidence = {
   department: Department;
   severity: Severity;
@@ -182,13 +283,13 @@ export type VelocityData = {
   targetProjection: number;
   gapToTarget: number;
   recoverableToday: number;
-  primaryThreat: PrimaryThreat;
+  primaryThreat: PrimaryThreatDecision | null;
   actionQueue: ActionQueueItem[];
   atRiskDeals: AtRiskDeal[];
   accountability: AccountabilityItem[];
   departmentPulse: DepartmentPulse[];
   trendSignals: TrendSignal[];
-  meetingBriefing: MeetingBriefing;
+  meetingBriefing: MeetingBriefingDecision;
 };
 
 export type VelocityEngineInput = {
@@ -202,13 +303,13 @@ export type VelocityEngineInput = {
 };
 
 export type VelocityEngineOutput = {
-  primaryThreat: PrimaryThreat;
-  actionQueue: ActionQueueItem[];
-  atRiskDeals: AtRiskDeal[];
+  primaryThreat: PrimaryThreatDecision | null;
+  actionQueue: RankedActionQueueDecision[];
+  atRiskDeals: VelocityAtRiskDeal[];
   profitLeaks: ProfitLeakDecision[];
   recoverableGrossEstimate: number;
-  accountabilityItems: AccountabilityItem[];
-  projectedClose: ProjectionSummary;
-  departmentHealth: DepartmentPulse[];
-  meetingBriefing: MeetingBriefing;
+  accountabilityItems: AccountabilityDecision[];
+  projectedClose: ProjectedCloseDecision;
+  departmentHealth: DepartmentHealthDecision[];
+  meetingBriefing: MeetingBriefingDecision;
 };

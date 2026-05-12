@@ -38,10 +38,6 @@ export function DashboardSummaryStrip() {
 
   if (!enabled) return null;
 
-  const ok = Boolean(data);
-  const recoverable = data?.recoverableToday ?? 0;
-  const freshness = data?.sourceHealth?.overallFreshness ?? "unknown";
-
   if (isLoading) {
     return (
       <div className="mt-2 border-t border-slate-200/80 pt-3">
@@ -57,7 +53,7 @@ export function DashboardSummaryStrip() {
     );
   }
 
-  if (error || !ok) {
+  if (error || !data) {
     return (
       <div className="mt-2 border-t border-[#9f1239]/20 pt-3 transition-opacity duration-200">
         <div className="flex items-center gap-2 rounded-lg border border-[#9f1239]/25 bg-[#fff1f2]/95 px-3 py-2 text-[12px] text-[#881337]">
@@ -68,11 +64,14 @@ export function DashboardSummaryStrip() {
     );
   }
 
+  const recoverable = data.recoverableToday ?? 0;
+  const freshness = data.sourceHealth?.overallFreshness ?? "unknown";
+
   const trackingGross = data.currentProjection;
   const targetGross = data.targetProjection;
   const gap = data.gapToTarget;
   const paceLabel = gap >= 0 ? "Ahead of pace" : "Behind pace";
-  const trust = data?.dataConfidence;
+  const trust = data.dataConfidence;
   const estimated = trust?.estimated;
   const estimateNote = trust?.estimationReason;
 
@@ -136,7 +135,7 @@ export function DashboardSummaryStrip() {
           {estimated && estimateNote ? <p className="mt-1 text-[10px] text-amber-700">{estimateNote}</p> : null}
         </div>
       </div>
-      {data?.sourceHealth?.fallbackNotices?.length ? (
+      {data.sourceHealth?.fallbackNotices?.length ? (
         <p className="mt-1.5 text-[11px] text-amber-700">{data.sourceHealth.fallbackNotices.join(" ")}</p>
       ) : null}
     </div>

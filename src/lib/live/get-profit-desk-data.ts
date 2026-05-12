@@ -109,9 +109,13 @@ function emptyFetch(kind: SheetKind): FetchedSheetRows {
     source: "google-sheets",
     kind,
     sheetId: "unavailable",
+    selectedGid: null,
     workbookTitle: null,
+    availableTabNames: [],
+    attemptedTabNames: [],
     range: "A1:Z1000",
     tabName: null,
+    resolutionNote: "Live fetch unavailable.",
     rows: [],
     lastSynced: new Date().toISOString(),
   };

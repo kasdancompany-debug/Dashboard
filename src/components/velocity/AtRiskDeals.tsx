@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AtRiskDeal } from "@/src/lib/profit-engine/types";
 
@@ -36,12 +36,13 @@ export function AtRiskDeals({ deals, viewAllHref = "/dashboard/sales", className
       <section className={cn("rounded-xl border border-slate-200/90 bg-white p-4", className)}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Top Sales Risks</h2>
-          <Button asChild variant="outline" size="xs">
-            <Link href={viewAllHref}>
-              View all sales risks
-              <ArrowRight className="h-3 w-3" />
-            </Link>
-          </Button>
+          <Link
+            href={viewAllHref}
+            className={cn(buttonVariants({ variant: "outline", size: "xs" }), "inline-flex items-center gap-1")}
+          >
+            View all sales risks
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
         <p className="mt-3 text-[13px] text-slate-600">No at-risk deals are currently flagged.</p>
       </section>
@@ -52,12 +53,13 @@ export function AtRiskDeals({ deals, viewAllHref = "/dashboard/sales", className
     <section className={cn("rounded-xl border border-slate-200/90 bg-white p-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]", className)}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Top Sales Risks</h2>
-        <Button asChild variant="outline" size="xs">
-          <Link href={viewAllHref}>
-            View all sales risks
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        </Button>
+        <Link
+          href={viewAllHref}
+          className={cn(buttonVariants({ variant: "outline", size: "xs" }), "inline-flex items-center gap-1")}
+        >
+          View all sales risks
+          <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
 
       <div className="mt-3 grid gap-2 md:grid-cols-2">

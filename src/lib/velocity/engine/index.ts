@@ -5,7 +5,7 @@ import { evaluateProfitLeaks } from "@/src/lib/velocity/engine/profit-leak-engin
 import { evaluateProjection } from "@/src/lib/velocity/engine/projection-engine";
 import { evaluateSalesHealth, evaluateSalesRisk } from "@/src/lib/velocity/engine/sales-risk-engine";
 import { evaluateServiceHealth, evaluateServiceRiskSignals } from "@/src/lib/velocity/engine/service-risk-engine";
-import type { ActionQueueDecision, PrimaryThreatDecision, VelocityEngineInput, VelocityEngineOutput } from "@/src/lib/velocity/engine/types";
+import type { PrimaryThreatDecision, RankedActionQueueDecision, VelocityEngineInput, VelocityEngineOutput } from "@/src/lib/velocity/engine/types";
 
 const severityRank = { low: 1, medium: 2, high: 3 } as const;
 
@@ -20,7 +20,7 @@ export function runVelocityIntelligenceEngine(input: VelocityEngineInput): Veloc
   const accountabilityItems = evaluateAccountability(input, atRiskDeals);
   const projectedClose = evaluateProjection(input, atRiskDeals, profitLeaks);
 
-  const actionQueue: ActionQueueDecision[] = [...profitLeaks, ...serviceSignals, ...partsSignals, ...accountabilityItems]
+  const actionQueue: RankedActionQueueDecision[] = [...profitLeaks, ...serviceSignals, ...partsSignals, ...accountabilityItems]
     .map((item, idx) => ({
       ...item,
       title: "title" in item ? item.title : `${item.department} ownership correction`,

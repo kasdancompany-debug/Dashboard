@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type ActionQueueItem = {
@@ -77,12 +77,16 @@ export function ActionQueue({ items, className }: ActionQueueProps) {
             </p>
             <p className="mt-2 text-[12px] text-[#71717A]">Action: {item.recommendedAction}</p>
 
-            <Button asChild variant="outline" size="sm" className="mt-3 h-8 border-[rgba(255,255,255,0.06)] bg-[rgba(168,85,247,0.12)] text-[12px] text-slate-100 hover:bg-[rgba(168,85,247,0.22)]">
-              <Link href={item.ctaHref}>
-                {item.ctaLabel}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
+            <Link
+              href={item.ctaHref}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "mt-3 inline-flex h-8 items-center gap-1 border-[rgba(255,255,255,0.06)] bg-[rgba(168,85,247,0.12)] text-[12px] text-slate-100 hover:bg-[rgba(168,85,247,0.22)]",
+              )}
+            >
+              {item.ctaLabel}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </article>
         ))}
       </div>

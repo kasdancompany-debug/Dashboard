@@ -1,9 +1,9 @@
 import type {
-  ActionQueueDecision,
   DepartmentHealthDecision,
   MeetingBriefingDecision,
   ProfitLeakDecision,
   ProjectedCloseDecision,
+  RankedActionQueueDecision,
 } from "@/src/lib/velocity/engine/types";
 
 const money = (value: number) => `$${Math.abs(Math.round(value)).toLocaleString()}`;
@@ -12,7 +12,7 @@ export function buildMeetingBriefing(input: {
   projectedClose: ProjectedCloseDecision;
   risks: ProfitLeakDecision[];
   opportunities: DepartmentHealthDecision[];
-  actionQueue: ActionQueueDecision[];
+  actionQueue: RankedActionQueueDecision[];
 }): MeetingBriefingDecision {
   const topRisk = input.risks[0];
   const headline = topRisk

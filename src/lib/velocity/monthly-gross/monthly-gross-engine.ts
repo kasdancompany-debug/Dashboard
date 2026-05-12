@@ -143,7 +143,7 @@ function departmentFromLines(department: MonthlyGrossDepartment, lines: GrossLin
   const trackingCandidates = totalLine ? [totalLine.trackingGross] : lines.map((line) => line.trackingGross);
   const trackingGross = trackingCandidates.some((value) => value === null)
     ? null
-    : trackingCandidates.reduce((sum, value) => sum + (value ?? 0), 0);
+    : trackingCandidates.reduce<number>((sum, value) => sum + (value ?? 0), 0);
   const targetGross = totalLine ? totalLine.targetGross : lines.reduce((sum, line) => sum + line.targetGross, 0);
   const gapToTarget = trackingGross === null ? null : trackingGross - targetGross;
   const pacePercent = trackingGross === null || targetGross <= 0 ? null : (trackingGross / targetGross) * 100;

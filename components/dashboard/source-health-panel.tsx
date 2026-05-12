@@ -5,8 +5,10 @@ import { formatDistanceToNowStrict } from "date-fns";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import type { VelocityData } from "@/src/lib/velocity/get-velocity-data";
+import type { SourceHealth } from "@/src/lib/velocity/engine/types";
 
 type LiveSummaryWithHealth = VelocityData;
+type SourceDeptRow = SourceHealth["departments"][number];
 
 const fetcher = async (url: string): Promise<LiveSummaryWithHealth> => {
   const response = await fetch(url);
@@ -54,7 +56,7 @@ export function SourceHealthPanel() {
   const trust = data.dataConfidence;
   const lastLabel = data.lastSynced ? formatDistanceToNowStrict(new Date(data.lastSynced), { addSuffix: true }) : "";
   const mismatches = health.departments.filter(
-    (d) => d.freshnessStatus !== "fresh" || !d.monthAligned,
+    (d: SourceDeptRow) => d.freshnessStatus !== "fresh" || !d.monthAligned,
   );
   const dataState: "trusted" | "watch" | "broken" =
     trust?.classification === "unreliable"
@@ -72,7 +74,7 @@ export function SourceHealthPanel() {
       : trust?.estimationReason ??
         health.staleDataWarnings[0] ??
         (mismatches.length > 0
-          ? `${mismatches.map((m) => m.department[0].toUpperCase() + m.department.slice(1)).join(" and ")} sources appear out of sync with reporting month.`
+          ? `${mismatches.map((m: SourceDeptRow) => m.department[0].toUpperCase() + m.department.slice(1)).join(" and ")} sources appear out of sync with reporting month.`
           : "One or more source checks failed.");
   const badgeClass =
     dataState === "trusted"
@@ -117,7 +119,7 @@ export function SourceHealthPanel() {
             <div className="rounded-md border border-amber-200/80 bg-amber-50/90 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wide text-amber-950">Warnings</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-amber-900">
-                {health.staleDataWarnings.map((w) => (
+                {health.staleDataWarnings.map((w: string) => (
                   <li key={w}>{w}</li>
                 ))}
               </ul>
@@ -129,7 +131,7 @@ export function SourceHealthPanel() {
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Sheet mismatches</p>
               {mismatches.length > 0 ? (
                 <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-slate-700">
-                  {mismatches.slice(0, 6).map((d) => (
+                  {mismatches.slice(0, 6).map((d: SourceDeptRow) => (
                     <li key={d.department}>
                       <span className="font-semibold capitalize">{d.department}</span>: {d.sheetTab ?? "tab unknown"}
                       {d.extractedSheetMonthKey ? ` (${d.extractedSheetMonthKey})` : ""}
@@ -143,7 +145,7 @@ export function SourceHealthPanel() {
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Connections</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-slate-700">
-                {health.departments.map((d) => (
+                {health.departments.map((d: SourceDeptRow) => (
                   <li key={`${d.department}-conn`}>
                     <span className="font-semibold capitalize">{d.department}</span>: {d.workbookTitle ?? "Workbook"} / {d.sheetTab ?? "Tab"}
                   </li>
