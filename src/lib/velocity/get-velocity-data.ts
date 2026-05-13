@@ -1,5 +1,6 @@
 import "server-only";
 
+import { buildExpandedInsightsKeyActions, type ExpandedInsightsKeyAction } from "@/src/lib/dashboard/expanded-insights-key-actions";
 import { getLiveDataset, type LiveDataset } from "@/src/lib/live/live-data";
 import type { AccountabilityItem, AtRiskDeal, DepartmentHealth } from "@/src/lib/profit-engine/types";
 import { runVelocityIntelligenceEngine } from "@/src/lib/velocity/engine";
@@ -65,6 +66,8 @@ export type VelocityData = {
     opportunities: string[];
     priorities: string[];
   };
+  /** Prioritized actions grounded in deal Notes + live metrics (Expanded insights). */
+  keyActions: ExpandedInsightsKeyAction[];
   normalized?: LiveDataset;
 };
 
@@ -240,6 +243,24 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     forecastLineItems: normalized.forecastLineItems ?? undefined,
   });
 
+  const keyActions = buildExpandedInsightsKeyActions({
+    reportingMonthKey: normalized.pipeline.reportingMonth,
+    salesDeals: normalized.salesDeals,
+    monthly: monthlyGrossTracking,
+    actionQueue: actionQueue.map((row) => ({
+      id: row.id,
+      rank: row.rank,
+      title: row.title,
+      action: row.action,
+      whyItMatters: row.whyItMatters,
+      severity: row.severity,
+      department: row.department,
+    })),
+    primaryThreat,
+    totalStoreGap: monthlyGrossTracking.totalGapToTarget,
+    staleWarnings: sourceIntel.sourceHealth.staleDataWarnings ?? [],
+  });
+
   return {
     lastSynced: normalized.pipeline.sourceHealth.lastSynced,
     timeline: {
@@ -264,6 +285,7 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     departmentPulse,
     trendSignals: toTrendSignals(meetingBriefing),
     meetingBriefing,
+    keyActions,
     ...(options?.includeNormalized ? { normalized } : {}),
   };
 }

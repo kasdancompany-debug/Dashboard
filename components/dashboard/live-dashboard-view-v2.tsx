@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { format } from "date-fns";
-import { Activity, Presentation, RefreshCcw } from "lucide-react";
+import { Activity, ClipboardList, Presentation, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -227,6 +227,55 @@ function DepartmentCommandCard({ dept, deptKey }: { dept: DepartmentGrossTrackin
 }
 
 type SignalDot = "ok" | "warn" | "bad" | "neutral";
+
+function keyActionPrioritySurface(priority: "critical" | "high" | "medium") {
+  switch (priority) {
+    case "critical":
+      return "border-rose-500/30 bg-rose-950/30 ring-rose-500/15";
+    case "high":
+      return "border-amber-500/25 bg-amber-950/20 ring-amber-400/12";
+    default:
+      return "border-sky-500/20 bg-sky-950/15 ring-sky-400/10";
+  }
+}
+
+function KeyActionsInsights({ items }: { items: VelocityData["keyActions"] }) {
+  if (!items.length) {
+    return (
+      <p className="text-[13px] leading-relaxed text-slate-500">
+        No key actions for this snapshot — sales Notes look sufficient for handoff and headline metrics are not raising automated leadership flags.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-3">
+      {items.map((item) => (
+        <li
+          key={item.id}
+          className={cn(
+            "rounded-xl border p-4 ring-1 ring-inset",
+            keyActionPrioritySurface(item.priority),
+          )}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+              {item.priority === "critical" ? "Critical" : item.priority === "high" ? "High" : "Medium"}
+            </p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-slate-500">
+              {item.sources.join(" · ")}
+            </p>
+          </div>
+          <p className="mt-1.5 text-[15px] font-semibold leading-snug text-white">{item.headline}</p>
+          <p className="mt-2 text-[13px] leading-relaxed text-slate-200/95">{item.action}</p>
+          <p className="mt-2 border-t border-white/10 pt-2 text-[12px] leading-snug text-slate-400">
+            <span className="font-semibold text-slate-500">Evidence: </span>
+            {item.evidence}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function OperationalSignalsList({ items }: { items: { text: string; dot: SignalDot }[] }) {
   if (!items.length) {
@@ -524,6 +573,17 @@ export function LiveDashboardViewV2() {
             <div className="mt-6 border-t border-white/10 pt-5">
               <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{"Today's signals"}</p>
               <OperationalSignalsList items={operationalSignals} />
+            </div>
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-2 flex items-center gap-2 text-sky-200/85">
+                <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Notes & intelligence</p>
+              </div>
+              <SectionHeader
+                title="Key actions"
+                subtitle="Prioritized for GSM / GM: grounded in sales sheet Notes, month pacing, worst tracking lines, velocity queue, and data warnings."
+              />
+              <KeyActionsInsights items={data.keyActions ?? []} />
             </div>
           </ExecSection>
 
