@@ -80,6 +80,15 @@ function daysForMonth(month: number, year: number) {
   return { daysUsed, daysAvailable };
 }
 
+function forecastLineSlug(metric: string, index: number) {
+  const base = metric
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return `${base || "row"}-${index}`;
+}
+
 function toLine(params: {
   id: string;
   department: MonthlyGrossDepartment;
@@ -237,6 +246,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
   const salesLineage = lineageMap.get("sales");
   const serviceLineage = lineageMap.get("service");
   const partsLineage = lineageMap.get("parts");
+  const forecastLineage = lineageMap.get("forecast");
   const reliableFromLineage = (source: typeof salesLineage) =>
     Boolean(source && !source.excluded && source.monthAligned);
 
@@ -553,6 +563,35 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     );
   }
 
+  const FORECAST_LINES_CAP = 80;
+  const forecastLines: GrossLineTracking[] = (() => {
+    const rows: GrossLineTracking[] = [];
+    if (!fc?.length || !forecastLineage) return rows;
+    const slice = fc.slice(0, FORECAST_LINES_CAP);
+    for (let i = 0; i < slice.length; i += 1) {
+      const row = slice[i];
+      if (!Number.isFinite(row.forecast) || row.forecast === 0) continue;
+      const label = row.metric?.trim() || `Forecast row ${i + 1}`;
+      rows.push(
+        toLine({
+          id: `forecast-line-${forecastLineSlug(label, i)}`,
+          department: "Forecast",
+          label,
+          actualGross: row.actual,
+          targetGross: row.forecast,
+          daysUsed,
+          daysAvailable,
+          sourceMonthMatches: Boolean(forecastLineage.monthAligned),
+          actualReliable: reliableFromLineage(forecastLineage),
+          source: "Forecast workbook",
+          explanation:
+            "Forecast tab: MTD actual vs budget/forecast for this metric; month-end projection from actual pacing (same basis as Sales, Service, and Parts lines).",
+        }),
+      );
+    }
+    return rows;
+  })();
+
   const departments: DepartmentGrossTracking[] = [
     departmentFromLines("Sales", salesLines),
     departmentFromLines("Service", serviceLines),
@@ -566,9 +605,9 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     "parts-gog-gross",
   ]);
 
-  const allLines = departments
-    .flatMap((d) => d.lines)
-    .filter((line) => line.gapToTarget !== null && !EXCLUDE_FROM_BEST_WORST.has(line.id));
+  const allLines = [...departments.flatMap((d) => d.lines), ...forecastLines].filter(
+    (line) => line.gapToTarget !== null && !EXCLUDE_FROM_BEST_WORST.has(line.id),
+  );
   const bestTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (b.gapToTarget ?? 0) - (a.gapToTarget ?? 0))[0]);
   const worstTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (a.gapToTarget ?? 0) - (b.gapToTarget ?? 0))[0]);
 

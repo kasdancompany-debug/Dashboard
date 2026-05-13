@@ -10,6 +10,7 @@ function norm(s: string) {
 }
 
 function metricConflictsDepartment(metricNorm: string, department: MonthlyGrossDepartment): boolean {
+  if (department === "Forecast") return false;
   if (department === "Sales") {
     if (/\bservice\b/.test(metricNorm) && !/sales\s+service|service\s+sales/.test(metricNorm)) return true;
     if (/\bparts\b/.test(metricNorm) && !/sales\s+parts/.test(metricNorm)) return true;
@@ -58,6 +59,7 @@ const DEPT_TOTAL_NEEDLES: Record<MonthlyGrossDepartment, string[][]> = {
     ["total parts gross", "parts gross total", "parts department total", "total parts department gross"],
     ["parts total gross", "total gross parts"],
   ],
+  Forecast: [],
 };
 
 export function resolveDepartmentForecastTotal(

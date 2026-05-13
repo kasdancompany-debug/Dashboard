@@ -123,6 +123,12 @@ function deptLineSignalTheme(department: MonthlyGrossDepartment | undefined): {
       surface: "bg-rose-950/25",
     };
   }
+  if (department === "Forecast") {
+    return {
+      rail: "border-l-[4px] border-l-violet-500/85",
+      surface: "bg-violet-950/25",
+    };
+  }
   return { rail: "border-l-[4px] border-l-slate-600", surface: "bg-slate-950/30" };
 }
 
@@ -532,7 +538,7 @@ export function LiveDashboardViewV2() {
           <ExecSection>
             <SectionHeader
               title="Expanded insights"
-              subtitle="Worst and best tracking lines across Sales, Service, and Parts (targets from the forecast tab when row names match)."
+              subtitle="Worst and best tracking lines across all four workbooks: Sales, Service, Parts, and Forecast (each line uses that sheet’s logic; Forecast uses tab actual vs budget with month-end pace)."
             />
             <div className="grid gap-3 md:grid-cols-2">
               <article

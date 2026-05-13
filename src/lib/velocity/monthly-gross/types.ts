@@ -1,6 +1,6 @@
 import type { SourceHealth } from "@/src/lib/velocity/engine/types";
 
-export type MonthlyGrossDepartment = "Sales" | "Service" | "Parts";
+export type MonthlyGrossDepartment = "Sales" | "Service" | "Parts" | "Forecast";
 
 export type TrackingStatus = "ahead" | "on-track" | "behind" | "insufficient-data";
 
