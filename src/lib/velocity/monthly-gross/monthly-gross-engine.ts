@@ -264,6 +264,19 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
   const salesTotalGross = safe(input.sales.summary?.actualGross) || salesTotalGrossFromDeals;
   const grossPerCopy = monthlySalesDeals.length > 0 ? salesTotalGross / monthlySalesDeals.length : null;
 
+  /** Align front/back *tracking* with sales sheet "Tracking gross" by MTD mix so gaps match the scorecard (deal run-rate alone often undercounts front vs DMS). */
+  const sheetSalesTracking =
+    typeof input.sales.summary?.trackingGross === "number" &&
+    Number.isFinite(input.sales.summary.trackingGross) &&
+    input.sales.summary.trackingGross > 0
+      ? input.sales.summary.trackingGross
+      : null;
+  const frontBackMtd = salesFrontGross + salesBackGross;
+  const salesFrontTrackingShare =
+    sheetSalesTracking !== null && frontBackMtd > 0 ? sheetSalesTracking * (salesFrontGross / frontBackMtd) : null;
+  const salesBackTrackingShare =
+    sheetSalesTracking !== null && frontBackMtd > 0 ? sheetSalesTracking * (salesBackGross / frontBackMtd) : null;
+
   const salesLines: GrossLineTracking[] = [
     toLine({
       id: "sales-new-gross",
@@ -302,7 +315,9 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
       source: "Parsed sales deals",
-      explanation: "Front-end gross vs forecast row when the metric name matches; otherwise modeled share of department target.",
+      explanation:
+        "Front-end gross: target from forecast when the row name matches; tracking uses the same share of sales sheet total tracking as MTD front ÷ (front+back) from deals.",
+      trackingOverride: salesFrontTrackingShare ?? undefined,
     }),
     toLine({
       id: "sales-back-gross",
@@ -315,7 +330,9 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
       source: "Parsed sales deals",
-      explanation: "Back-end gross vs forecast row when matched; otherwise modeled share of department target.",
+      explanation:
+        "Back-end gross: target from forecast when matched; tracking uses the same share of sales sheet total tracking as MTD back ÷ (front+back) from deals.",
+      trackingOverride: salesBackTrackingShare ?? undefined,
     }),
     toLine({
       id: "sales-total-gross",
