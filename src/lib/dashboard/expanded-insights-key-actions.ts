@@ -248,6 +248,7 @@ export function buildExpandedInsightsKeyActions(params: {
   }
 
   for (const row of params.actionQueue.slice(0, 3)) {
+    if (/front\s*(end)?\s*gross\s+below\s+target/i.test(row.title)) continue;
     add({
       id: `velocity-aq-${row.id}`,
       priority: row.severity === "high" ? "critical" : row.severity === "medium" ? "high" : "medium",

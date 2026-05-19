@@ -598,8 +598,11 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     departmentFromLines("Parts", partsLines),
   ];
 
+  /** Sub-lines excluded from store-wide best/worst focus (desk splits, low-signal rows). */
   const EXCLUDE_FROM_BEST_WORST = new Set([
     "sales-gross-per-copy",
+    "sales-front-gross",
+    "sales-back-gross",
     "service-cp-labour",
     "parts-wholesale-gross",
     "parts-gog-gross",
