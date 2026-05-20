@@ -36,7 +36,7 @@ describe("Service parser", () => {
   test("parses service summary and advisor section", () => {
     const sheet = [
       ["Service Tracker"],
-      wideRow({ 1: "sales" }),
+      wideRow({ 1: "sales", 5: "FORECAST", 7: "ACTUAL", 12: "TRACKING", 15: "UP/DOWN" }),
       wideRow({ 1: "Customer", 7: "$312,600" }),
       wideRow({ 1: "Warranty", 7: "$128,300" }),
       wideRow({ 1: "Internal", 7: "$44,100" }),
@@ -48,11 +48,11 @@ describe("Service parser", () => {
         12: "$501,200",
         15: "($13,800)",
       }),
-      wideRow({ 1: "gross" }),
-      wideRow({ 1: "Customer", 7: "$169,200" }),
+      wideRow({ 1: "gross", 5: "FORECAST", 7: "ACTUAL", 12: "TRACKING", 15: "UP/DOWN" }),
+      wideRow({ 1: "Customer", 5: "$82,044", 7: "$40,061", 12: "$66,767.85" }),
       wideRow({ 1: "Warranty", 7: "$52,400" }),
       wideRow({ 1: "Internal", 7: "$14,800" }),
-      wideRow({ 1: "Total", 7: "$236,400" }),
+      wideRow({ 1: "Total", 5: "$120,351", 7: "$236,400", 12: "$106,821.58" }),
       wideRow({ 0: "Daily C/P Labor Department Goal", 17: "$140" }),
       ["Advisor", "CSI", "ELR", "HPRO", "CP RO", "CP Labor", "Wildcards"],
       ["J. Martin", "96.7", "$149.2", "3.1", "96", "$81,400", "18"],
@@ -62,6 +62,9 @@ describe("Service parser", () => {
     const result = parseServiceSheet(sheet, "service-tracker");
     expect(result.data.summary.sales.total).toBe(485000);
     expect(result.data.summary.upDown).toBe(-13800);
+    expect(result.data.summary.grossMetrics.customer.forecast).toBe(82044);
+    expect(result.data.summary.grossMetrics.customer.tracking).toBeCloseTo(66767.85, 0);
+    expect(result.data.summary.forecast).toBe(120351);
     expect(result.data.advisorPerformance[0].name).toBe("J. Martin");
     expect(result.data.advisorPerformance[1].elr).toBe(141.8);
   });
@@ -71,7 +74,7 @@ describe("Parts parser", () => {
   test("parses parts summary and category breakdown", () => {
     const sheet = [
       ["Parts Tracker"],
-      wideRow({ 1: "sales" }),
+      wideRow({ 1: "sales", 5: "FORECAST", 7: "ACTUAL", 12: "TRACKING", 15: "UP/DOWN" }),
       wideRow({ 1: "Customer", 7: "$138,900" }),
       wideRow({ 1: "Warranty", 7: "$74,200" }),
       wideRow({ 1: "Internal", 7: "$96,800" }),
@@ -82,7 +85,7 @@ describe("Parts parser", () => {
         12: "$325,200",
         15: "($21,100)",
       }),
-      wideRow({ 1: "gross" }),
+      wideRow({ 1: "gross", 5: "FORECAST", 7: "ACTUAL", 12: "TRACKING", 15: "UP/DOWN" }),
       wideRow({ 1: "Customer", 7: "$51,200" }),
       wideRow({ 1: "Warranty", 7: "$20,500" }),
       wideRow({ 1: "Internal", 7: "$34,300" }),

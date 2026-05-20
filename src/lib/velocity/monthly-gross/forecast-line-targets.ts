@@ -111,7 +111,7 @@ const LINE_NEEDLES: Record<string, string[]> = {
     "customer pay gross",
     "customer gross service",
     "cp gross",
-    "customer gross",
+    "service customer-pay gross",
     "customer-pay gross",
   ],
   "Service:Warranty Gross": ["service warranty gross", "warranty gross service", "warranty gross"],

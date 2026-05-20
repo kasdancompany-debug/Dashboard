@@ -12,11 +12,13 @@ import {
   parseNumber,
 } from "@/src/lib/parsers/parse-utils";
 import { parseTabToCanonicalKey } from "@/src/lib/google/month-tab-resolver";
+import { emptyDeptGrossSubLineMetrics, type DeptGrossSubLineMetricsMap } from "@/src/lib/parsers/dept-summary-metrics";
 
 type ServiceParsed = {
   summary: {
     sales: { customer: number; warranty: number; internal: number; total: number };
     gross: { customer: number; warranty: number; internal: number; total: number };
+    grossMetrics: DeptGrossSubLineMetricsMap;
     previousYear: number;
     forecast: number;
     actual: number;
@@ -41,6 +43,7 @@ export function parseServiceSheet(rows: SheetMatrix, sourceSheet: string) {
   const summary: ServiceParsed["summary"] = {
     sales: { customer: 0, warranty: 0, internal: 0, total: 0 },
     gross: { customer: 0, warranty: 0, internal: 0, total: 0 },
+    grossMetrics: emptyDeptGrossSubLineMetrics(),
     previousYear: 0,
     forecast: 0,
     actual: 0,
@@ -138,18 +141,32 @@ export function parseServiceSheet(rows: SheetMatrix, sourceSheet: string) {
     }
 
     if (section === "gross") {
-      if (label.includes("customer") && actualValue !== null) summary.gross.customer = actualValue;
-      if (label.includes("warranty") && actualValue !== null) summary.gross.warranty = actualValue;
-      if (label.includes("internal") && actualValue !== null) summary.gross.internal = actualValue;
+      if (label.includes("customer")) {
+        if (actualValue !== null) summary.gross.customer = actualValue;
+        if (forecastValue !== null) summary.grossMetrics.customer.forecast = forecastValue;
+        if (trackingValue !== null) summary.grossMetrics.customer.tracking = trackingValue;
+      }
+      if (label.includes("warranty")) {
+        if (actualValue !== null) summary.gross.warranty = actualValue;
+        if (forecastValue !== null) summary.grossMetrics.warranty.forecast = forecastValue;
+        if (trackingValue !== null) summary.grossMetrics.warranty.tracking = trackingValue;
+      }
+      if (label.includes("internal")) {
+        if (actualValue !== null) summary.gross.internal = actualValue;
+        if (forecastValue !== null) summary.grossMetrics.internal.forecast = forecastValue;
+        if (trackingValue !== null) summary.grossMetrics.internal.tracking = trackingValue;
+      }
       if (label === "total" && actualValue !== null) {
         summary.gross.total = actualValue;
         foundServiceGrossTotal = true;
       }
       if (label === "total" && forecastValue !== null) {
-        // Gross forecast is the correct target basis for service pacing.
+        summary.grossMetrics.total.forecast = forecastValue;
+        // Gross forecast is the correct target basis for service department pacing.
         summary.forecast = forecastValue;
       }
       if (label === "total" && trackingValue !== null) {
+        summary.grossMetrics.total.tracking = trackingValue;
         summary.tracking = trackingValue;
       }
     }

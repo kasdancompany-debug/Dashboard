@@ -8,12 +8,12 @@ import { useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
-  BarChart3,
   CheckCircle2,
-  ChevronDown,
+  CircleDollarSign,
   CircleAlert,
   Clock3,
   Eye,
+  Radar,
   Target,
   TrendingDown,
   TrendingUp,
@@ -24,7 +24,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { VelocityData } from "@/src/lib/velocity/get-velocity-data";
 import type { BestWorstTrackingLine, DepartmentGrossTracking, MonthlyGrossDepartment } from "@/src/lib/velocity/monthly-gross/types";
-import type { ExpandedInsightsKeyAction } from "@/src/lib/dashboard/expanded-insights-key-actions";
+import type { ExpandedInsightsKeyAction, KeyActionStatus } from "@/src/lib/dashboard/expanded-insights-key-actions";
+import type { OpportunityRadarItem } from "@/src/lib/dashboard/opportunity-radar";
 import {
   ExecSection,
   gapTone,
@@ -34,12 +35,25 @@ import {
   type SignalDot,
 } from "@/components/dashboard/live-dashboard-shared";
 
-const DEPT_PILL: Record<MonthlyGrossDepartment, string> = {
+const DEPT_PILL: Record<MonthlyGrossDepartment | "Store", string> = {
   Sales: "bg-emerald-500/30 text-emerald-50 ring-emerald-400/50",
   Service: "bg-amber-500/30 text-amber-50 ring-amber-400/50",
   Parts: "bg-rose-500/30 text-rose-50 ring-rose-400/50",
   Forecast: "bg-violet-500/30 text-violet-50 ring-violet-400/50",
+  Store: "bg-violet-500/25 text-violet-50 ring-violet-400/40",
 };
+
+const RADAR_ROLE_LABEL = {
+  dollar: "Highest dollar",
+  operational: "Fastest fix",
+  defensive: "Defensive move",
+} as const;
+
+const CONFIDENCE_PILL = {
+  High: "border-emerald-400/45 bg-emerald-500/15 text-emerald-100",
+  Medium: "border-amber-400/45 bg-amber-500/15 text-amber-100",
+  Low: "border-slate-500/40 bg-slate-800/70 text-slate-300",
+} as const;
 
 const PRIORITY_THEME = {
   critical: {
@@ -55,6 +69,8 @@ const PRIORITY_THEME = {
     evidenceBox: "border-rose-400/30 bg-rose-950/50",
     evidenceLabel: "text-rose-200",
     metric: "border-rose-400/40 bg-rose-500/15 text-rose-100",
+    impactBox: "border-violet-400/30 bg-violet-950/40",
+    impactLabel: "text-violet-200",
   },
   high: {
     label: "This week",
@@ -69,6 +85,8 @@ const PRIORITY_THEME = {
     evidenceBox: "border-amber-400/30 bg-amber-950/45",
     evidenceLabel: "text-amber-200",
     metric: "border-amber-400/40 bg-amber-500/15 text-amber-100",
+    impactBox: "border-violet-400/28 bg-violet-950/35",
+    impactLabel: "text-violet-200",
   },
   medium: {
     label: "Watch",
@@ -83,6 +101,8 @@ const PRIORITY_THEME = {
     evidenceBox: "border-sky-400/25 bg-sky-950/40",
     evidenceLabel: "text-sky-200",
     metric: "border-sky-400/35 bg-sky-500/12 text-sky-100",
+    impactBox: "border-violet-400/25 bg-violet-950/30",
+    impactLabel: "text-violet-200",
   },
 } as const;
 
@@ -100,19 +120,6 @@ function deptLineSurface(department: MonthlyGrossDepartment | undefined, kind: "
 function gapMeterPercent(tracking: number | null, target: number) {
   if (tracking === null || !Number.isFinite(tracking) || target <= 0) return null;
   return Math.min(130, Math.max(0, (tracking / target) * 100));
-}
-
-function parseEvidenceMetrics(evidence: string): string[] {
-  const metrics: string[] = [];
-  const moneyMatches = evidence.match(/(?:≈\s*)?\$[\d,]+(?:\.\d+)?[kKmM]?/g);
-  if (moneyMatches) metrics.push(...moneyMatches.slice(0, 2));
-  const pctMatches = evidence.match(/\d{1,3}%/g);
-  if (pctMatches) metrics.push(...pctMatches.slice(0, 1));
-  if (metrics.length < 2 && /behind|under|below|gap/i.test(evidence)) {
-    const short = evidence.length > 72 ? `${evidence.slice(0, 69)}…` : evidence;
-    if (!metrics.some((m) => short.includes(m))) metrics.push(short);
-  }
-  return metrics.slice(0, 3);
 }
 
 function LineFocusCard({ kind, line }: { kind: "focus" | "strength"; line: BestWorstTrackingLine | null }) {
@@ -237,12 +244,43 @@ function SignalChips({ items }: { items: { text: string; dot: SignalDot }[] }) {
   );
 }
 
+function keyActionStatusLabel(status: KeyActionStatus): string {
+  if (status === "in_progress") return "In progress";
+  if (status === "done") return "Done";
+  return "Open";
+}
+
+function ActionCardFooter({ item }: { item: ExpandedInsightsKeyAction }) {
+  const showDue = Boolean(item.dueLabel?.trim());
+  const showStatus = Boolean(item.status);
+  const showOwner = Boolean(item.owner?.trim());
+
+  if (!showOwner && !showDue && !showStatus) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5 border-t border-white/[0.06] pt-2.5">
+      {showOwner ? (
+        <span className="rounded-md border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[10px] leading-snug text-slate-300">
+          <span className="font-semibold text-slate-500">Owner:</span> {item.owner}
+        </span>
+      ) : null}
+      {showDue ? (
+        <span className="rounded-md border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[10px] leading-snug text-slate-300">
+          <span className="font-semibold text-slate-500">Due:</span> {item.dueLabel}
+        </span>
+      ) : null}
+      {showStatus ? (
+        <span className="rounded-md border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[10px] leading-snug text-slate-300">
+          <span className="font-semibold text-slate-500">Status:</span> {keyActionStatusLabel(item.status!)}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function ActionCard({ item, index }: { item: ExpandedInsightsKeyAction; index: number }) {
   const theme = PRIORITY_THEME[item.priority];
   const PriorityIcon = theme.Icon;
-  const metrics = parseEvidenceMetrics(item.evidence);
-  const [showFullEvidence, setShowFullEvidence] = useState(false);
-  const evidenceLong = item.evidence.length > 100;
 
   return (
     <li
@@ -278,43 +316,69 @@ function ActionCard({ item, index }: { item: ExpandedInsightsKeyAction; index: n
             <div className={cn("rounded-xl border p-3.5", theme.actionBox)}>
               <p className={cn("flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]", theme.actionLabel)}>
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-                Your move
+                Your Move
               </p>
-              <p className="mt-2 text-[14px] font-medium leading-relaxed text-slate-100">{item.action}</p>
+              <p className="mt-2 text-[13px] font-medium leading-snug text-slate-100">{item.action}</p>
             </div>
 
             <div className={cn("rounded-xl border p-3.5", theme.evidenceBox)}>
               <p className={cn("flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]", theme.evidenceLabel)}>
-                <BarChart3 className="h-3.5 w-3.5" aria-hidden />
-                Why it matters
+                <Target className="h-3.5 w-3.5" aria-hidden />
+                Why It Matters
               </p>
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {metrics.map((m) => (
-                  <li key={m} className={cn("rounded-lg border px-2.5 py-1 font-mono text-[13px] font-bold tabular-nums", theme.metric)}>
-                    {m}
-                  </li>
-                ))}
-              </ul>
-              {(evidenceLong && !showFullEvidence) || !evidenceLong ? (
-                <p className={cn("mt-2 text-[12px] leading-relaxed text-slate-300/90", evidenceLong && !showFullEvidence && "line-clamp-2")}>
-                  {item.evidence}
-                </p>
-              ) : null}
-              {evidenceLong ? (
-                <button
-                  type="button"
-                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-white"
-                  onClick={() => setShowFullEvidence((v) => !v)}
-                >
-                  {showFullEvidence ? "Show less" : "Full detail"}
-                  <ChevronDown className={cn("h-3.5 w-3.5 transition", showFullEvidence && "rotate-180")} aria-hidden />
-                </button>
-              ) : null}
+              <p className="mt-2 text-[13px] leading-snug text-slate-300/95">{item.evidence}</p>
             </div>
           </div>
+
+          <div className={cn("rounded-xl border px-3.5 py-2.5", theme.impactBox)}>
+            <p className={cn("flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]", theme.impactLabel)}>
+              <CircleDollarSign className="h-3.5 w-3.5" aria-hidden />
+              Expected Impact
+            </p>
+            <p className="mt-1.5 text-[13px] font-semibold leading-snug text-slate-100">{item.expectedImpact}</p>
+          </div>
+
+          <ActionCardFooter item={item} />
         </div>
       </div>
     </li>
+  );
+}
+
+function OpportunityRadarSection({ items }: { items: OpportunityRadarItem[] }) {
+  if (!items.length) return null;
+
+  return (
+    <ul className="grid gap-2 sm:grid-cols-3">
+      {items.map((item) => (
+        <li
+          key={item.id}
+          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 ring-1 ring-inset ring-white/[0.06]"
+        >
+          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-violet-300/90">{RADAR_ROLE_LABEL[item.role]}</p>
+          <p className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">{item.title}</p>
+          <p className="mt-1 font-mono text-[11px] font-medium leading-snug text-violet-200/90">{item.estimatedImpact}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              className={cn(
+                "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ring-1 ring-inset",
+                DEPT_PILL[item.department],
+              )}
+            >
+              {item.department}
+            </span>
+            <span
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
+                CONFIDENCE_PILL[item.confidence],
+              )}
+            >
+              {item.confidence}
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -383,6 +447,7 @@ export type LiveDashboardExpandedInsightsProps = {
   worst: BestWorstTrackingLine | null;
   best: BestWorstTrackingLine | null;
   operationalSignals: { text: string; dot: SignalDot }[];
+  opportunityRadar: VelocityData["opportunityRadar"];
   keyActions: VelocityData["keyActions"];
   sourceLineage: VelocityData["sourceLineage"];
   departmentByName: Map<string, DepartmentGrossTracking | undefined>;
@@ -392,6 +457,7 @@ export function LiveDashboardExpandedInsights({
   worst,
   best,
   operationalSignals,
+  opportunityRadar,
   keyActions,
   sourceLineage,
   departmentByName,
@@ -422,6 +488,17 @@ export function LiveDashboardExpandedInsights({
       </ExecSection>
 
       <ExecSection>
+        <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+          <Radar className="h-3.5 w-3.5 text-violet-400/90" aria-hidden />
+          Opportunity radar
+        </p>
+        <p className="mb-3 text-[12px] leading-snug text-slate-500">
+          Top recovery plays ranked by dollar, speed, and defense — scan before key actions.
+        </p>
+        <OpportunityRadarSection items={opportunityRadar ?? []} />
+      </ExecSection>
+
+      <ExecSection>
         <p className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
           <Zap className="h-3.5 w-3.5 text-rose-400/90" aria-hidden />
           Key actions
@@ -429,7 +506,7 @@ export function LiveDashboardExpandedInsights({
         <p className="mb-4 text-[13px] text-slate-400">
           Scan the color band: <span className="font-semibold text-rose-300">red = today</span>,{" "}
           <span className="font-semibold text-amber-300">amber = this week</span>,{" "}
-          <span className="font-semibold text-sky-300">blue = watch</span>. Green box = what to do; tinted box = the numbers.
+          <span className="font-semibold text-sky-300">blue = watch</span>. Each card: issue → your move → why it matters → expected impact.
         </p>
         <KeyActionsDigest items={items} />
       </ExecSection>

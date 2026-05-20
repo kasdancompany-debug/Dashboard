@@ -9,6 +9,7 @@ import { MeetingModeOverlay, type MeetingModePayload } from "@/components/dashbo
 import { LiveDashboardExpandedInsights } from "@/components/dashboard/live-dashboard-expanded-insights";
 import { LiveDashboardLockedTop, type DeptKey } from "@/components/dashboard/live-dashboard-locked-top";
 import { money } from "@/components/dashboard/live-dashboard-shared";
+import { buildSinceYesterdayRow } from "@/src/lib/dashboard/since-yesterday";
 import type { VelocityData } from "@/src/lib/velocity/get-velocity-data";
 import type { DepartmentGrossTracking } from "@/src/lib/velocity/monthly-gross/types";
 
@@ -154,6 +155,17 @@ export function LiveDashboardViewV2() {
 
   const lastSyncedLabel = `Live · ${format(new Date(data.lastSynced), "h:mm a")}`;
 
+  const sinceYesterday = buildSinceYesterdayRow(
+    {
+      reportingMonthKey: selectedMonthKey,
+      daysUsed: monthly.daysUsed,
+      totalTrackingGross: monthly.totalTrackingGross,
+      totalPacePercent: monthly.totalPacePercent,
+      departments: monthly.departments,
+    },
+    data.sinceYesterdaySnapshot ?? null,
+  );
+
   return (
     <div className="relative z-0 text-slate-100">
       <div className="mx-auto w-full max-w-[1080px] space-y-4 px-4 pb-24 pt-4 md:px-6 md:pt-5">
@@ -177,6 +189,7 @@ export function LiveDashboardViewV2() {
             daysAvailable: monthly.daysAvailable,
           }}
           deptCards={deptCards}
+          sinceYesterday={sinceYesterday}
         />
 
         <div className="flex flex-col items-stretch gap-2 border-t border-white/[0.06] pt-4 sm:flex-row sm:items-center sm:justify-center">
@@ -197,6 +210,7 @@ export function LiveDashboardViewV2() {
             worst={worst}
             best={best}
             operationalSignals={operationalSignals}
+            opportunityRadar={data.opportunityRadar}
             keyActions={data.keyActions}
             sourceLineage={data.sourceLineage}
             departmentByName={departmentByName}

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, CircleDot, Maximize2, Minimize2, X } from "l
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildMeetingScripts } from "@/src/lib/dashboard/meeting-mode-script";
 import type { BestWorstTrackingLine, DepartmentGrossTracking, MonthlyGrossTracking } from "@/src/lib/velocity/monthly-gross/types";
 
 type SignalDot = "ok" | "warn" | "bad" | "neutral";
@@ -159,6 +160,17 @@ function SlideHead({ eyebrow, title, strap }: { eyebrow: string; title: string; 
       {strap ? <p className="pt-1 text-[13px] leading-snug text-stone-600">{strap}</p> : null}
       <div className="mt-2 h-px w-14 bg-stone-900/80" aria-hidden />
     </header>
+  );
+}
+
+/** Optional spoken line — subtle; does not replace slide content. */
+function MeetingScript({ script }: { script: string }) {
+  if (!script.trim()) return null;
+  return (
+    <p className="shrink-0 rounded-lg border border-stone-200/70 bg-stone-50/90 px-3 py-2 text-[13px] leading-snug text-stone-700 md:px-3.5">
+      <span className="mr-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Meeting script</span>
+      <span className="font-medium text-stone-800">{script}</span>
+    </p>
   );
 }
 
@@ -371,6 +383,7 @@ function Slide1StoreOverview({ p }: { p: MeetingModePayload }) {
   const paceTone: BarTone =
     totalPace === null || !Number.isFinite(totalPace) ? "neutral" : totalPace >= 95 ? "positive" : totalPace >= 90 ? "watch" : "risk";
   const takeaways = buildStoreTakeaways(p);
+  const script = buildMeetingScripts(p).storeOverview;
 
   return (
     <BriefSlide>
@@ -379,6 +392,7 @@ function Slide1StoreOverview({ p }: { p: MeetingModePayload }) {
         title={monthTitle}
         strap="Headline metric first — then how the month is pacing vs published targets."
       />
+      <MeetingScript script={script} />
 
       {/* Primary focal: one composed surface */}
       <div className="rounded-2xl border border-stone-200/90 bg-white/90 p-3.5 shadow-[0_1px_0_rgba(0,0,0,0.04),0_18px_48px_-36px_rgba(0,0,0,0.12)] md:p-4">
@@ -446,6 +460,7 @@ function Slide2DepartmentHealth({ p }: { p: MeetingModePayload }) {
   ];
   const values = rows.map((r) => Math.max(0, r.dept?.trackingGross ?? 0));
   const bullets = buildDepartmentBullets(p);
+  const script = buildMeetingScripts(p).departmentHealth;
 
   return (
     <BriefSlide>
@@ -454,6 +469,7 @@ function Slide2DepartmentHealth({ p }: { p: MeetingModePayload }) {
         title="Pace posture by department"
         strap="Compare projected gross mix, then land the story in three bullets."
       />
+      <MeetingScript script={script} />
 
       <div className="rounded-2xl border border-stone-200/90 bg-white/90 p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] md:p-3.5">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2">
@@ -601,6 +617,7 @@ function SplitLinePanel({
 function Slide3OpportunitiesRisks({ p }: { p: MeetingModePayload }) {
   const { worst, best } = p;
   const bullets = buildRiskStrengthBullets(p);
+  const script = buildMeetingScripts(p).opportunitiesRisks;
 
   return (
     <BriefSlide>
@@ -609,6 +626,7 @@ function Slide3OpportunitiesRisks({ p }: { p: MeetingModePayload }) {
         title="Strength on the left, exposure on the right"
         strap="One focal comparison — then align the room on the same three facts."
       />
+      <MeetingScript script={script} />
 
       <div className="overflow-hidden rounded-2xl border border-stone-200/90 bg-white/95 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
         <div className="grid grid-cols-1 divide-y divide-stone-200/90 md:grid-cols-2 md:divide-x md:divide-y-0">
@@ -626,6 +644,7 @@ function Slide3OpportunitiesRisks({ p }: { p: MeetingModePayload }) {
 
 function Slide4ActionFocus({ p }: { p: MeetingModePayload }) {
   const items = buildTodayFocusItems(p);
+  const script = buildMeetingScripts(p).actionFocus;
 
   return (
     <BriefSlide>
@@ -634,6 +653,7 @@ function Slide4ActionFocus({ p }: { p: MeetingModePayload }) {
         title="Today's focus"
         strap="End the briefing with explicit priorities — only signals already in the data."
       />
+      <MeetingScript script={script} />
 
       <TakeawayCallout label="Meeting priorities — assign owners">
         <TakeawayBulletList

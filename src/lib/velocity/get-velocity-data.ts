@@ -1,6 +1,8 @@
 import "server-only";
 
 import { buildExpandedInsightsKeyActions, type ExpandedInsightsKeyAction } from "@/src/lib/dashboard/expanded-insights-key-actions";
+import { buildOpportunityRadar, type OpportunityRadarItem } from "@/src/lib/dashboard/opportunity-radar";
+import type { SinceYesterdaySnapshot } from "@/src/lib/dashboard/since-yesterday";
 import { getLiveDataset, type LiveDataset } from "@/src/lib/live/live-data";
 import type { AccountabilityItem, AtRiskDeal, DepartmentHealth } from "@/src/lib/profit-engine/types";
 import { runVelocityIntelligenceEngine } from "@/src/lib/velocity/engine";
@@ -68,6 +70,10 @@ export type VelocityData = {
   };
   /** Prioritized actions grounded in deal Notes + live metrics (Expanded insights). */
   keyActions: ExpandedInsightsKeyAction[];
+  /** Top 3 recovery opportunities for Opportunity Radar (Expanded insights). */
+  opportunityRadar: OpportunityRadarItem[];
+  /** Optional prior-day snapshot when daily history storage is enabled. */
+  sinceYesterdaySnapshot?: SinceYesterdaySnapshot | null;
   normalized?: LiveDataset;
 };
 
@@ -209,6 +215,7 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
           internal: normalized.serviceSummary.internalGross,
           total: normalized.serviceSummary.totalGross,
         },
+        grossLineMetrics: normalized.serviceSummary.grossLineMetrics,
         actual: normalized.serviceSummary.cpLaborActual,
         tracking: normalized.serviceSummary.cpLaborTracking,
         forecast: normalized.serviceSummary.forecastGross,
@@ -222,6 +229,7 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
           internal: normalized.partsSummary.internalGross,
           total: normalized.partsSummary.totalGross,
         },
+        grossLineMetrics: normalized.partsSummary.grossLineMetrics,
         actual: normalized.partsSummary.totalGross,
         tracking: normalized.partsSummary.trackingGross,
         forecast: normalized.partsSummary.forecastGross,
@@ -243,6 +251,22 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     forecastLineItems: normalized.forecastLineItems ?? undefined,
   });
 
+  const opportunityRadar = buildOpportunityRadar({
+    monthly: monthlyGrossTracking,
+    actionQueue: actionQueue.map((row) => ({
+      id: row.id,
+      title: row.title,
+      department: row.department,
+      impact: row.impact,
+      severity: row.severity,
+    })),
+    primaryThreat: primaryThreat
+      ? { title: primaryThreat.title, department: primaryThreat.department, impact: primaryThreat.impact }
+      : null,
+    recoverableToday: engine.recoverableGrossEstimate,
+    staleWarnings: sourceIntel.sourceHealth.staleDataWarnings ?? [],
+  });
+
   const keyActions = buildExpandedInsightsKeyActions({
     reportingMonthKey: normalized.pipeline.reportingMonth,
     salesDeals: normalized.salesDeals,
@@ -255,6 +279,8 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
       whyItMatters: row.whyItMatters,
       severity: row.severity,
       department: row.department,
+      impact: row.impact,
+      owner: row.owner,
     })),
     primaryThreat,
     totalStoreGap: monthlyGrossTracking.totalGapToTarget,
@@ -286,6 +312,7 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     trendSignals: toTrendSignals(meetingBriefing),
     meetingBriefing,
     keyActions,
+    opportunityRadar,
     ...(options?.includeNormalized ? { normalized } : {}),
   };
 }

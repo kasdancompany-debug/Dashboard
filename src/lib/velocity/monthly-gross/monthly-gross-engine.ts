@@ -2,6 +2,7 @@ import type { SalesDeal } from "@/src/lib/types/dealership";
 import type { ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import type { SourceHealth } from "@/src/lib/velocity/engine/types";
 import { resolveDepartmentForecastTotal, resolveForecastTargetForLine } from "@/src/lib/velocity/monthly-gross/forecast-line-targets";
+import type { DeptGrossSubLineMetrics, DeptGrossSubLineMetricsMap } from "@/src/lib/parsers/dept-summary-metrics";
 import type {
   BestWorstTrackingLine,
   DepartmentGrossTracking,
@@ -14,6 +15,7 @@ import type {
 type ServiceParsedInput = {
   summary: {
     gross: { customer: number; warranty: number; internal: number; total: number };
+    grossLineMetrics?: DeptGrossSubLineMetricsMap;
     actual: number;
     tracking: number;
     forecast: number;
@@ -23,6 +25,7 @@ type ServiceParsedInput = {
 type PartsParsedInput = {
   summary: {
     gross: { customer: number; warranty: number; internal: number; total: number };
+    grossLineMetrics?: DeptGrossSubLineMetricsMap;
     actual: number;
     tracking: number;
     forecast: number;
@@ -78,6 +81,16 @@ function daysForMonth(month: number, year: number) {
     year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1);
   const daysUsed = isPast ? daysAvailable : isCurrent ? now.getDate() : 0;
   return { daysUsed, daysAvailable };
+}
+
+function sheetLineForecast(metrics: DeptGrossSubLineMetrics | undefined, modeledFallback: number): number {
+  const f = metrics?.forecast;
+  return f !== null && f !== undefined && Number.isFinite(f) && f > 0 ? f : modeledFallback;
+}
+
+function sheetLineTracking(metrics: DeptGrossSubLineMetrics | undefined): number | undefined {
+  const t = metrics?.tracking;
+  return t !== null && t !== undefined && Number.isFinite(t) && t > 0 ? t : undefined;
 }
 
 function forecastLineSlug(metric: string, index: number) {
@@ -380,45 +393,59 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
 
   const serviceTarget =
     resolveDepartmentForecastTotal("Service", fc) ?? safe(input.targets?.Service);
+  const serviceMetrics = input.service.summary.grossLineMetrics;
   const serviceLines: GrossLineTracking[] = [
     toLine({
       id: "service-customer-gross",
       department: "Service",
       label: "Customer Gross",
       actualGross: safe(input.service.summary.gross.customer),
-      targetGross: lineForecastTarget("Service", "Customer Gross", serviceTarget * 0.5),
+      targetGross: sheetLineForecast(
+        serviceMetrics?.customer,
+        lineForecastTarget("Service", "Customer Gross", serviceTarget * 0.5),
+      ),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
       actualReliable: reliableFromLineage(serviceLineage),
       source: "Parsed service summary",
-      explanation: "Customer-pay gross contribution tracking.",
+      explanation:
+        "Customer-pay gross: forecast and tracking from the service workbook row when present; otherwise forecast-tab match or modeled share.",
+      trackingOverride: sheetLineTracking(serviceMetrics?.customer),
     }),
     toLine({
       id: "service-warranty-gross",
       department: "Service",
       label: "Warranty Gross",
       actualGross: safe(input.service.summary.gross.warranty),
-      targetGross: lineForecastTarget("Service", "Warranty Gross", serviceTarget * 0.25),
+      targetGross: sheetLineForecast(
+        serviceMetrics?.warranty,
+        lineForecastTarget("Service", "Warranty Gross", serviceTarget * 0.25),
+      ),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
       actualReliable: reliableFromLineage(serviceLineage),
       source: "Parsed service summary",
-      explanation: "Warranty gross contribution tracking.",
+      explanation: "Warranty gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(serviceMetrics?.warranty),
     }),
     toLine({
       id: "service-internal-gross",
       department: "Service",
       label: "Internal Gross",
       actualGross: safe(input.service.summary.gross.internal),
-      targetGross: lineForecastTarget("Service", "Internal Gross", serviceTarget * 0.25),
+      targetGross: sheetLineForecast(
+        serviceMetrics?.internal,
+        lineForecastTarget("Service", "Internal Gross", serviceTarget * 0.25),
+      ),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(serviceLineage?.monthAligned),
       actualReliable: reliableFromLineage(serviceLineage),
       source: "Parsed service summary",
-      explanation: "Internal gross contribution tracking.",
+      explanation: "Internal gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(serviceMetrics?.internal),
     }),
     toLine({
       id: "service-total-gross",
@@ -463,45 +490,58 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
 
   const partsTarget =
     resolveDepartmentForecastTotal("Parts", fc) ?? safe(input.targets?.Parts);
+  const partsMetrics = input.parts.summary.grossLineMetrics;
   const partsLines: GrossLineTracking[] = [
     toLine({
       id: "parts-customer-gross",
       department: "Parts",
       label: "Customer Gross",
       actualGross: safe(input.parts.summary.gross.customer),
-      targetGross: lineForecastTarget("Parts", "Customer Gross", partsTarget * 0.5),
+      targetGross: sheetLineForecast(
+        partsMetrics?.customer,
+        lineForecastTarget("Parts", "Customer Gross", partsTarget * 0.5),
+      ),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
       actualReliable: reliableFromLineage(partsLineage),
       source: "Parsed parts summary",
-      explanation: "Customer parts gross contribution tracking.",
+      explanation: "Customer parts gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(partsMetrics?.customer),
     }),
     toLine({
       id: "parts-warranty-gross",
       department: "Parts",
       label: "Warranty Gross",
       actualGross: safe(input.parts.summary.gross.warranty),
-      targetGross: lineForecastTarget("Parts", "Warranty Gross", partsTarget * 0.2),
+      targetGross: sheetLineForecast(
+        partsMetrics?.warranty,
+        lineForecastTarget("Parts", "Warranty Gross", partsTarget * 0.2),
+      ),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
       actualReliable: reliableFromLineage(partsLineage),
       source: "Parsed parts summary",
-      explanation: "Warranty parts gross contribution tracking.",
+      explanation: "Warranty parts gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(partsMetrics?.warranty),
     }),
     toLine({
       id: "parts-internal-gross",
       department: "Parts",
       label: "Internal Gross",
       actualGross: safe(input.parts.summary.gross.internal),
-      targetGross: lineForecastTarget("Parts", "Internal Gross", partsTarget * 0.3),
+      targetGross: sheetLineForecast(
+        partsMetrics?.internal,
+        lineForecastTarget("Parts", "Internal Gross", partsTarget * 0.3),
+      ),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(partsLineage?.monthAligned),
       actualReliable: reliableFromLineage(partsLineage),
       source: "Parsed parts summary",
-      explanation: "Internal parts gross contribution tracking.",
+      explanation: "Internal parts gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(partsMetrics?.internal),
     }),
     toLine({
       id: "parts-total-gross",
@@ -598,9 +638,14 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     departmentFromLines("Parts", partsLines),
   ];
 
-  /** Sub-lines excluded from store-wide best/worst focus (desk splits, low-signal rows). */
+  /**
+   * Excluded from best/worst: deal-only splits without workbook tracking, desk proxies,
+   * and forecast-tab reference rows (operational lines use Sales/Service/Parts sheets).
+   */
   const EXCLUDE_FROM_BEST_WORST = new Set([
     "sales-gross-per-copy",
+    "sales-new-gross",
+    "sales-used-gross",
     "sales-front-gross",
     "sales-back-gross",
     "service-cp-labour",
@@ -608,8 +653,11 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     "parts-gog-gross",
   ]);
 
-  const allLines = [...departments.flatMap((d) => d.lines), ...forecastLines].filter(
-    (line) => line.gapToTarget !== null && !EXCLUDE_FROM_BEST_WORST.has(line.id),
+  const allLines = [...departments.flatMap((d) => d.lines)].filter(
+    (line) =>
+      line.gapToTarget !== null &&
+      line.department !== "Forecast" &&
+      !EXCLUDE_FROM_BEST_WORST.has(line.id),
   );
   const bestTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (b.gapToTarget ?? 0) - (a.gapToTarget ?? 0))[0]);
   const worstTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (a.gapToTarget ?? 0) - (b.gapToTarget ?? 0))[0]);

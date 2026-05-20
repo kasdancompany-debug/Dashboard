@@ -1,3 +1,5 @@
+import type { DeptGrossSubLineMetricsMap } from "@/src/lib/parsers/dept-summary-metrics";
+
 export type DealType = "new" | "used" | "unknown";
 export type DealStatus = "delivered" | "incoming" | "preorder" | "pending" | "issue";
 export type PaceStatus = "ahead" | "on-track" | "at-risk";
@@ -49,6 +51,8 @@ export type ServiceSummary = {
   warrantyGross: number;
   internalGross: number;
   totalGross: number;
+  /** Forecast and tracking per gross sub-line from the service workbook grid. */
+  grossLineMetrics?: DeptGrossSubLineMetricsMap;
   cpLaborActual: number;
   cpLaborTracking: number;
   dailyCpLaborGoal: number;
@@ -82,6 +86,8 @@ export type PartsSummary = {
   warrantyGross: number;
   internalGross: number;
   totalGross: number;
+  /** Forecast and tracking per gross sub-line from the parts workbook grid. */
+  grossLineMetrics?: DeptGrossSubLineMetricsMap;
   /** Total gross · Tracking from the parts workbook gross summary (when parsed). */
   trackingGross: number;
   forecastSales: number;

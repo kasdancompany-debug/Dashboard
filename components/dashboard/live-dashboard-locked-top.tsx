@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MonthSelector } from "@/src/components/velocity/MonthSelector";
 import type { DepartmentGrossTracking } from "@/src/lib/velocity/monthly-gross/types";
+import { SinceYesterdayRow } from "@/components/dashboard/since-yesterday-row";
 import {
   ExecSection,
   departmentHealthFromPace,
@@ -20,6 +21,7 @@ import {
   paceTone,
   signedMoney,
 } from "@/components/dashboard/live-dashboard-shared";
+import type { SinceYesterdayRowModel } from "@/src/lib/dashboard/since-yesterday";
 
 export type DeptKey = "Sales" | "Service" | "Parts";
 
@@ -53,12 +55,60 @@ const DEPT_THEME: Record<
   },
 };
 
-function DepartmentCommandCard({ dept, deptKey }: { dept: DepartmentGrossTracking | null | undefined; deptKey: DeptKey }) {
+function dailyRecoveryNeed(
+  dept: DepartmentGrossTracking | null | undefined,
+  daysUsed: number,
+  daysAvailable: number,
+): { text: string; toneClass: string } | null {
+  if (!dept) return null;
+
+  const tracking = dept.trackingGross;
+  const target = dept.targetGross;
+  if (tracking === null || !Number.isFinite(tracking) || !Number.isFinite(target) || target <= 0) {
+    return null;
+  }
+
+  const remainingGap = target - tracking;
+  if (remainingGap <= 0) return null;
+
+  const remainingDays = daysAvailable - daysUsed;
+  if (!Number.isFinite(remainingDays) || remainingDays <= 0) return null;
+
+  const daily = remainingGap / remainingDays;
+  if (!Number.isFinite(daily) || daily <= 0) return null;
+
+  const gap = dept.gapToTarget;
+  const pace = dept.pacePercent;
+  let toneClass = "text-[#FB7185]";
+  if (gap !== null && Number.isFinite(gap)) {
+    toneClass = gapTone(gap);
+  } else if (pace !== null && Number.isFinite(pace)) {
+    toneClass = paceTone(pace);
+  }
+
+  return {
+    text: `Needs ~$${Math.round(daily).toLocaleString()}/day to recover`,
+    toneClass,
+  };
+}
+
+function DepartmentCommandCard({
+  dept,
+  deptKey,
+  daysUsed,
+  daysAvailable,
+}: {
+  dept: DepartmentGrossTracking | null | undefined;
+  deptKey: DeptKey;
+  daysUsed: number;
+  daysAvailable: number;
+}) {
   const theme = DEPT_THEME[deptKey];
   const name = dept?.department ?? "Needs Setup";
   const pace = dept?.pacePercent ?? null;
   const paceLabel =
     pace === null || pace === undefined || !Number.isFinite(pace) ? "—" : `${Math.round(pace)}%`;
+  const recovery = dailyRecoveryNeed(dept, daysUsed, daysAvailable);
 
   return (
     <article
@@ -121,6 +171,9 @@ function DepartmentCommandCard({ dept, deptKey }: { dept: DepartmentGrossTrackin
                 </p>
               </div>
             </div>
+            {recovery ? (
+              <p className={cn("text-[11px] font-medium leading-snug", recovery.toneClass)}>{recovery.text}</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -148,6 +201,7 @@ export type LiveDashboardLockedTopProps = {
     daysAvailable: number;
   };
   deptCards: { dept: DepartmentGrossTracking | null | undefined; key: DeptKey }[];
+  sinceYesterday: SinceYesterdayRowModel;
 };
 
 export function LiveDashboardLockedTop({
@@ -163,6 +217,7 @@ export function LiveDashboardLockedTop({
   totalGap,
   monthly,
   deptCards,
+  sinceYesterday,
 }: LiveDashboardLockedTopProps) {
   const totalPace = monthly.totalPacePercent;
 
@@ -250,13 +305,25 @@ export function LiveDashboardLockedTop({
             </article>
           ))}
         </div>
+
+        {sinceYesterday.status === "ready" ? (
+          <div className="mt-4 border-t border-white/10 pt-4">
+            <SinceYesterdayRow model={sinceYesterday} />
+          </div>
+        ) : null}
       </ExecSection>
 
       <ExecSection>
         <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Department scorecards</p>
         <div className="grid gap-3 lg:grid-cols-3">
           {deptCards.map(({ dept, key }) => (
-            <DepartmentCommandCard key={key} dept={dept} deptKey={key} />
+            <DepartmentCommandCard
+              key={key}
+              dept={dept}
+              deptKey={key}
+              daysUsed={monthly.daysUsed}
+              daysAvailable={monthly.daysAvailable}
+            />
           ))}
         </div>
       </ExecSection>
