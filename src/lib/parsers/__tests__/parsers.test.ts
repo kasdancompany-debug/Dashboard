@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { parseForecastSheet } from "../forecast-parser";
 import { parsePartsSheet } from "../parts-parser";
 import { parseSalesSheet } from "../sales-parser";
 import { parseServiceSheet } from "../service-parser";
@@ -67,6 +68,36 @@ describe("Service parser", () => {
     expect(result.data.summary.forecast).toBe(120351);
     expect(result.data.advisorPerformance[0].name).toBe("J. Martin");
     expect(result.data.advisorPerformance[1].elr).toBe(141.8);
+  });
+});
+
+describe("Forecast parser", () => {
+  test("parses wide annual forecast workbook for selected month", () => {
+    const sheet = [
+      ["", "", "Sault Nissan Forecast Q2 2026"],
+      ["", "", "April", "May", "June", "July"],
+      ["", "New Vehicle Gross Profit"],
+      ["", "Retail Units", "35", "35", "30", "0"],
+      ["", "Total New Vehicle Gross Profit", "$95,000", "$110,250", "$94,500", "$0"],
+      ["", "Used Vehicle Gross Profit"],
+      ["", "Total Used Vehicle Gross Profit", "$98,000", "$105,000", "$99,000", "$0"],
+      ["", "Service Gross Profit"],
+      ["", "Customer Pay Gross", "$78,000", "$82,044", "$80,000", "$0"],
+      ["", "Warranty Gross", "$7,500", "$8,603", "$8,200", "$0"],
+      ["", "Internal Gross", "$28,000", "$29,704", "$30,000", "$0"],
+      ["", "Total Service Gross Profit", "$115,000", "$120,351", "$118,200", "$0"],
+      ["", "Parts Gross Profit"],
+      ["", "Total Parts Gross Profit", "$48,000", "$50,850", "$49,500", "$0"],
+    ];
+
+    const result = parseForecastSheet(sheet, "2026 Forecast Q2", { reportingMonthKey: "2026-05" });
+    expect(result.data.length).toBeGreaterThan(5);
+    expect(result.summary.totalForecast).toBeGreaterThan(200_000);
+    const newTotal = result.data.find((row) => /new vehicle gross/i.test(row.metric));
+    expect(newTotal?.forecast).toBe(110_250);
+    const serviceTotal = result.data.find((row) => /total service gross/i.test(row.metric));
+    expect(serviceTotal?.forecast).toBe(120_351);
+    expect(result.dataQualityIssues.some((i) => /Parsed \d+ budget line/i.test(i))).toBe(true);
   });
 });
 

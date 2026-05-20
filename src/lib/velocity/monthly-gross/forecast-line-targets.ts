@@ -49,14 +49,17 @@ const DEPT_TOTAL_NEEDLES: Record<MonthlyGrossDepartment, string[][]> = {
   Sales: [
     ["total sales gross", "sales department total", "sales gross total", "vehicle sales total", "total vehicle gross"],
     ["total new and used gross", "total new & used gross", "new and used gross total", "total gross sales"],
+    ["total new and used gross profit", "total new & used gross profit"],
     ["sales total", "total sales"],
   ],
   Service: [
     ["total service gross", "service gross total", "service department total", "total service department gross"],
+    ["total service gross profit", "service gross profit total"],
     ["service total gross", "total gross service"],
   ],
   Parts: [
     ["total parts gross", "parts gross total", "parts department total", "total parts department gross"],
+    ["total parts gross profit", "parts gross profit total"],
     ["parts total gross", "total gross parts"],
   ],
   Forecast: [],
@@ -104,8 +107,22 @@ const LINE_NEEDLES: Record<string, string[]> = {
     "total vehicle gross",
     "total gross",
   ],
-  "Sales:New Vehicle Gross": ["new vehicle gross", "new car gross", "new gross", "new units gross", "new retail gross"],
-  "Sales:Used Vehicle Gross": ["used vehicle gross", "used car gross", "used gross", "used units gross", "used retail gross"],
+  "Sales:New Vehicle Gross": [
+    "total new vehicle gross profit",
+    "new vehicle gross",
+    "new car gross",
+    "new gross",
+    "new units gross",
+    "new retail gross",
+  ],
+  "Sales:Used Vehicle Gross": [
+    "total used vehicle gross profit",
+    "used vehicle gross",
+    "used car gross",
+    "used gross",
+    "used units gross",
+    "used retail gross",
+  ],
   "Service:Customer Gross": [
     "service customer gross",
     "customer pay gross",

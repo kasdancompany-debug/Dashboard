@@ -174,7 +174,9 @@ export async function getProfitDeskData(options?: { reportingMonth?: string | nu
   const salesParsed = parseSalesSheet(sales.rows, "sales");
   const serviceParsed = parseServiceSheet(service.rows, "service");
   const partsParsed = parsePartsSheet(parts.rows, "parts");
-  const forecastParsed = forecastEnabled ? parseForecastSheet(forecast.rows, "forecast") : null;
+  const forecastParsed = forecastEnabled
+    ? parseForecastSheet(forecast.rows, forecast.tabName ?? "forecast", { reportingMonthKey: reportingMonth })
+    : null;
 
   const normalizedSalesDeals = salesParsed.data.filter((d) => d.customer && d.vehicle);
 

@@ -265,6 +265,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
 
   const fc = input.forecastLineItems;
 
+  /** Target: daily sheet row → annual forecast workbook → modeled % split. */
   function lineForecastTarget(department: MonthlyGrossDepartment, label: string, modeledFallback: number): number {
     const hit = resolveForecastTargetForLine(department, label, fc);
     return hit !== null && Number.isFinite(hit) && hit > 0 ? hit : modeledFallback;

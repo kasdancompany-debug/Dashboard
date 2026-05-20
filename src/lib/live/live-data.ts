@@ -180,7 +180,7 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
 
   const forecastParsed =
     !forecastExcluded && forecast.rows.length > 0
-      ? parseForecastSheet(forecast.rows, forecast.tabName ?? "forecast")
+      ? parseForecastSheet(forecast.rows, forecast.tabName ?? "forecast", { reportingMonthKey: reportingMonth })
       : null;
   const forecastLineItems: ForecastTrendItem[] | null =
     forecastParsed && forecastParsed.data.length > 0 ? forecastParsed.data : null;
@@ -287,7 +287,7 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     },
     {
       source: "forecast",
-      connectionStatus: "excluded",
+      connectionStatus: forecastExcluded ? "excluded" : "connected",
       sheetTitle: forecast.workbookTitle,
       attemptedTabNames: forecast.attemptedTabNames,
       availableTabNames: forecast.availableTabNames,
