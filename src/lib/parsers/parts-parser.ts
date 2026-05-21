@@ -14,7 +14,7 @@ import { emptyDeptGrossSubLineMetrics, type DeptGrossSubLineMetricsMap } from "@
 type PartsParsed = {
   summary: {
     sales: { customer: number; warranty: number; internal: number; total: number };
-    gross: { customer: number; warranty: number; internal: number; total: number };
+    gross: { customer: number; warranty: number; internal: number; wholesale: number; gog: number; total: number };
     grossMetrics: DeptGrossSubLineMetricsMap;
     forecast: number;
     actual: number;
@@ -28,7 +28,7 @@ export function parsePartsSheet(rows: SheetMatrix, sourceSheet: string) {
   const issues: string[] = [...collectFormulaErrorDiagnostics(rows)];
   const summary: PartsParsed["summary"] = {
     sales: { customer: 0, warranty: 0, internal: 0, total: 0 },
-    gross: { customer: 0, warranty: 0, internal: 0, total: 0 },
+    gross: { customer: 0, warranty: 0, internal: 0, wholesale: 0, gog: 0, total: 0 },
     grossMetrics: emptyDeptGrossSubLineMetrics(),
     forecast: 0,
     actual: 0,
@@ -129,6 +129,16 @@ export function parsePartsSheet(rows: SheetMatrix, sourceSheet: string) {
         if (forecastValue !== null) summary.grossMetrics.internal.forecast = forecastValue;
         if (trackingValue !== null) summary.grossMetrics.internal.tracking = trackingValue;
       }
+      if (label.includes("wholesale")) {
+        if (actualValue !== null) summary.gross.wholesale = actualValue;
+        if (forecastValue !== null) summary.grossMetrics.wholesale.forecast = forecastValue;
+        if (trackingValue !== null) summary.grossMetrics.wholesale.tracking = trackingValue;
+      }
+      if (label.includes("gog")) {
+        if (actualValue !== null) summary.gross.gog = actualValue;
+        if (forecastValue !== null) summary.grossMetrics.gog.forecast = forecastValue;
+        if (trackingValue !== null) summary.grossMetrics.gog.tracking = trackingValue;
+      }
       if (label === "total" && actualValue !== null) {
         summary.gross.total = actualValue;
         foundPartsGrossTotal = true;
@@ -191,8 +201,16 @@ export function parsePartsSheetForMonth(
     { label: "Customer Gross", value: base.data.summary.gross.customer },
     { label: "Warranty Gross", value: base.data.summary.gross.warranty },
     { label: "Internal Gross", value: base.data.summary.gross.internal },
-    ...(wholesale ? [{ label: "Wholesale Gross", value: wholesale.gross }] : []),
-    ...(gog ? [{ label: "GOG Gross", value: gog.gross }] : []),
+    ...(base.data.summary.gross.wholesale > 0
+      ? [{ label: "Wholesale Gross", value: base.data.summary.gross.wholesale }]
+      : wholesale
+        ? [{ label: "Wholesale Gross", value: wholesale.gross }]
+        : []),
+    ...(base.data.summary.gross.gog > 0
+      ? [{ label: "GOG Gross", value: base.data.summary.gross.gog }]
+      : gog
+        ? [{ label: "GOG Gross", value: gog.gross }]
+        : []),
     { label: "Total Parts Gross", value: base.data.summary.gross.total },
   ];
   const confidence = Math.max(0, Math.min(100, 100 - warnings.length * 10));

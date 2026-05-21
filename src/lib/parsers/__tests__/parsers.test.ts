@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { parseForecastSheet } from "../forecast-parser";
 import { parsePartsSheet } from "../parts-parser";
 import { parseSalesSheet } from "../sales-parser";
+import { parseSalesGrossTopMetrics } from "../sales-gross-top-metrics";
 import { parseServiceSheet } from "../service-parser";
 
 /** Matches live sheet layout: labels in column B, actuals in column H (index 7). */
@@ -30,6 +31,24 @@ describe("Sales parser", () => {
     expect(result.data[1].frontGross).toBe(-350);
     expect(result.data[1].status).toBe("incoming");
     expect(result.dataQualityIssues.some((i) => i.includes("TBD/NT"))).toBe(true);
+  });
+
+  test("parses sales gross grid for new/used tracking", () => {
+    const sheet = [
+      ["Sales Daily Log"],
+      wideRow({ 1: "gross", 5: "FORECAST", 7: "ACTUAL", 12: "TRACKING" }),
+      wideRow({ 1: "New Vehicle Gross", 5: "$110,250", 7: "$62,000", 12: "$116,500" }),
+      wideRow({ 1: "Used Vehicle Gross", 5: "$105,000", 7: "$62,000", 12: "$104,200" }),
+      wideRow({ 1: "Total New & Used Gross", 5: "$215,250", 7: "$124,000", 12: "$220,785" }),
+      ["Date", "Customer", "Manager", "Salesperson", "Vehicle", "StockNumber", "DealType", "FrontGross", "BackGross", "TotalGross", "Status"],
+    ];
+
+    const metrics = parseSalesGrossTopMetrics(sheet);
+    expect(metrics.usedVehicle.tracking).toBe(104_200);
+    expect(metrics.usedVehicle.forecast).toBe(105_000);
+    expect(metrics.usedVehicle.actual).toBe(62_000);
+    expect(metrics.newVehicle.tracking).toBe(116_500);
+    expect(metrics.total.tracking).toBe(220_785);
   });
 });
 
@@ -120,6 +139,8 @@ describe("Parts parser", () => {
       wideRow({ 1: "Customer", 7: "$51,200" }),
       wideRow({ 1: "Warranty", 7: "$20,500" }),
       wideRow({ 1: "Internal", 7: "$34,300" }),
+      wideRow({ 1: "Wholesale", 5: "$5,750", 7: "$5,036", 12: "$8,393", 15: "$2,643" }),
+      wideRow({ 1: "GOG", 5: "$4,200", 7: "$3,100", 12: "$5,167", 15: "($1,033)" }),
       wideRow({ 1: "Total", 7: "$106,000" }),
       wideRow({ 1: "Accessories", 7: "$44,000" }),
       wideRow({ 1: "Tires", 7: "$38,500" }),

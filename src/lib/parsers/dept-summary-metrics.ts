@@ -8,10 +8,21 @@ export type DeptGrossSubLineMetricsMap = {
   customer: DeptGrossSubLineMetrics;
   warranty: DeptGrossSubLineMetrics;
   internal: DeptGrossSubLineMetrics;
+  /** Parts workbook only — wholesale gross row. */
+  wholesale: DeptGrossSubLineMetrics;
+  /** Parts workbook only — GOG gross row. */
+  gog: DeptGrossSubLineMetrics;
   total: DeptGrossSubLineMetrics;
 };
 
 export function emptyDeptGrossSubLineMetrics(): DeptGrossSubLineMetricsMap {
   const blank = (): DeptGrossSubLineMetrics => ({ forecast: null, tracking: null });
-  return { customer: blank(), warranty: blank(), internal: blank(), total: blank() };
+  return {
+    customer: blank(),
+    warranty: blank(),
+    internal: blank(),
+    wholesale: blank(),
+    gog: blank(),
+    total: blank(),
+  };
 }

@@ -3,6 +3,7 @@ import type { ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import type { SourceHealth } from "@/src/lib/velocity/engine/types";
 import { resolveDepartmentForecastTotal, resolveForecastTargetForLine } from "@/src/lib/velocity/monthly-gross/forecast-line-targets";
 import type { DeptGrossSubLineMetrics, DeptGrossSubLineMetricsMap } from "@/src/lib/parsers/dept-summary-metrics";
+import type { SalesGrossSubLineMetrics, SalesGrossTopMetricsMap } from "@/src/lib/parsers/sales-gross-top-metrics";
 import type {
   BestWorstTrackingLine,
   DepartmentGrossTracking,
@@ -24,7 +25,7 @@ type ServiceParsedInput = {
 
 type PartsParsedInput = {
   summary: {
-    gross: { customer: number; warranty: number; internal: number; total: number };
+    gross: { customer: number; warranty: number; internal: number; wholesale: number; gog: number; total: number };
     grossLineMetrics?: DeptGrossSubLineMetricsMap;
     actual: number;
     tracking: number;
@@ -39,6 +40,9 @@ type SalesParsedInput = {
     actualGross?: number | null;
     trackingGross?: number | null;
     targetGross?: number | null;
+    grossLineMetrics?: SalesGrossTopMetricsMap;
+    newUnits?: number;
+    usedUnits?: number;
   };
 };
 
@@ -85,12 +89,187 @@ function daysForMonth(month: number, year: number) {
 
 function sheetLineForecast(metrics: DeptGrossSubLineMetrics | undefined, modeledFallback: number): number {
   const f = metrics?.forecast;
-  return f !== null && f !== undefined && Number.isFinite(f) && f > 0 ? f : modeledFallback;
+  return f !== null && f !== undefined && Number.isFinite(f) && f >= 1000 ? f : modeledFallback;
+}
+
+function salesSheetLineForecast(metrics: SalesGrossSubLineMetrics | undefined, modeledFallback: number): number {
+  const f = metrics?.forecast;
+  return f !== null && f !== undefined && Number.isFinite(f) && f >= 1000 ? f : modeledFallback;
 }
 
 function sheetLineTracking(metrics: DeptGrossSubLineMetrics | undefined): number | undefined {
   const t = metrics?.tracking;
   return t !== null && t !== undefined && Number.isFinite(t) && t > 0 ? t : undefined;
+}
+
+function salesSheetLineTracking(
+  metrics: SalesGrossSubLineMetrics | undefined,
+  daysUsed: number,
+  daysAvailable: number,
+): number | undefined {
+  const fromSheet = metrics?.tracking;
+  if (fromSheet !== null && fromSheet !== undefined && Number.isFinite(fromSheet) && fromSheet > 0) return fromSheet;
+  const actual = metrics?.actual;
+  if (actual !== null && actual !== undefined && Number.isFinite(actual) && actual > 0 && daysUsed > 0) {
+    const projected = tracking(actual, daysUsed, daysAvailable);
+    return projected !== null ? projected : undefined;
+  }
+  return undefined;
+}
+
+function sumDealGrossByType(deals: SalesDeal[]) {
+  let newGross = 0;
+  let usedGross = 0;
+  let unknownGross = 0;
+  for (const deal of deals) {
+    const g = safe(deal.totalGross);
+    if (deal.dealType === "new") newGross += g;
+    else if (deal.dealType === "used") usedGross += g;
+    else unknownGross += g;
+  }
+  return { newGross, usedGross, unknownGross };
+}
+
+function allocateUnclassifiedDealGross(
+  deals: SalesDeal[],
+  newUnits: number,
+  usedUnits: number,
+): { newGross: number; usedGross: number } {
+  const { newGross, usedGross, unknownGross } = sumDealGrossByType(deals);
+  const unitSum = newUnits + usedUnits;
+  if (unknownGross > 0 && unitSum > 0) {
+    return {
+      newGross: newGross + unknownGross * (newUnits / unitSum),
+      usedGross: usedGross + unknownGross * (usedUnits / unitSum),
+    };
+  }
+  return { newGross, usedGross };
+}
+
+function resolveSalesNewUsedActualGross(params: {
+  sheetTotalActual: number;
+  metrics?: SalesGrossTopMetricsMap;
+  dealNewRaw: number;
+  dealUsedRaw: number;
+  dealNewAllocated: number;
+  dealUsedAllocated: number;
+  newUnits: number;
+  usedUnits: number;
+}): { newActual: number; usedActual: number; method: string } {
+  const sheetNew = params.metrics?.newVehicle.actual;
+  const sheetUsed = params.metrics?.usedVehicle.actual;
+  if (
+    sheetNew !== null &&
+    sheetNew !== undefined &&
+    sheetUsed !== null &&
+    sheetUsed !== undefined &&
+    sheetNew + sheetUsed >= params.sheetTotalActual * 0.85
+  ) {
+    return { newActual: sheetNew, usedActual: sheetUsed, method: "Daily Log new/used gross rows" };
+  }
+
+  const rawDealSum = params.dealNewRaw + params.dealUsedRaw;
+  if (rawDealSum >= params.sheetTotalActual * 0.85) {
+    return {
+      newActual: params.dealNewRaw,
+      usedActual: params.dealUsedRaw,
+      method: "Deal log new/used gross from classified deals",
+    };
+  }
+
+  const unitSum = params.newUnits + params.usedUnits;
+  if (unitSum > 0 && params.sheetTotalActual > 0) {
+    return {
+      newActual: params.sheetTotalActual * (params.newUnits / unitSum),
+      usedActual: params.sheetTotalActual * (params.usedUnits / unitSum),
+      method: "Store total gross split by new/used unit mix (most deal $ is not classified new/used in the log)",
+    };
+  }
+
+  return {
+    newActual: params.dealNewAllocated,
+    usedActual: params.dealUsedAllocated,
+    method: "Deal log gross with unclassified deals split by units",
+  };
+}
+
+function resolveNewUsedSalesTracking(params: {
+  metrics?: SalesGrossTopMetricsMap;
+  sheetTotal: number | null;
+  newTarget: number;
+  usedTarget: number;
+  newActual: number;
+  usedActual: number;
+  dealNewRaw: number;
+  dealUsedRaw: number;
+  sheetTotalActual: number;
+  daysUsed: number;
+  daysAvailable: number;
+}): { newTracking?: number; usedTracking?: number; method: string } {
+  const newFromSheet = params.metrics?.newVehicle.tracking;
+  const usedFromSheet = params.metrics?.usedVehicle.tracking;
+  const newDirect =
+    newFromSheet !== null && newFromSheet !== undefined && Number.isFinite(newFromSheet) && newFromSheet > 0
+      ? newFromSheet
+      : undefined;
+  const usedDirect =
+    usedFromSheet !== null && usedFromSheet !== undefined && Number.isFinite(usedFromSheet) && usedFromSheet > 0
+      ? usedFromSheet
+      : undefined;
+
+  if (newDirect !== undefined && usedDirect !== undefined) {
+    return { newTracking: newDirect, usedTracking: usedDirect, method: "Daily Log tracking columns for new and used" };
+  }
+
+  if (params.sheetTotal !== null && params.sheetTotal > 0) {
+    if (newDirect !== undefined && usedDirect === undefined) {
+      return {
+        newTracking: newDirect,
+        usedTracking: params.sheetTotal - newDirect,
+        method: "Sheet new tracking; used is remainder of store tracking gross",
+      };
+    }
+    if (usedDirect !== undefined && newDirect === undefined) {
+      return {
+        newTracking: params.sheetTotal - usedDirect,
+        usedTracking: usedDirect,
+        method: "Sheet used tracking; new is remainder of store tracking gross",
+      };
+    }
+
+    const rawDealSum = params.dealNewRaw + params.dealUsedRaw;
+    const dealGrossReliable = rawDealSum >= params.sheetTotalActual * 0.5;
+
+    if (dealGrossReliable) {
+      const newProj = tracking(params.newActual, params.daysUsed, params.daysAvailable);
+      const usedProj = tracking(params.usedActual, params.daysUsed, params.daysAvailable);
+      if (newProj !== null && usedProj !== null && newProj + usedProj > 0) {
+        const sum = newProj + usedProj;
+        return {
+          newTracking: params.sheetTotal * (newProj / sum),
+          usedTracking: params.sheetTotal * (usedProj / sum),
+          method: "Each line MTD gross run-rate projected, scaled to match store Tracking Gross on the Daily Log",
+        };
+      }
+    }
+
+    const targetSum = params.newTarget + params.usedTarget;
+    if (targetSum > 0) {
+      return {
+        newTracking: params.sheetTotal * (params.newTarget / targetSum),
+        usedTracking: params.sheetTotal * (params.usedTarget / targetSum),
+        method: "Store tracking gross split by annual forecast new/used targets (no line MTD on sheet)",
+      };
+    }
+  }
+
+  const newFallback = salesSheetLineTracking(params.metrics?.newVehicle, params.daysUsed, params.daysAvailable);
+  const usedFallback = salesSheetLineTracking(params.metrics?.usedVehicle, params.daysUsed, params.daysAvailable);
+  return {
+    newTracking: newFallback,
+    usedTracking: usedFallback,
+    method: "Per-line projection from parsed sheet/deal MTD",
+  };
 }
 
 function forecastLineSlug(metric: string, index: number) {
@@ -147,6 +326,77 @@ function toLine(params: {
   };
 }
 
+/** Store-wide cards: exclude deal splits (unreliable tracking) and proxy lines. */
+const EXCLUDE_STORE_BEST_WORST = new Set([
+  "sales-gross-per-copy",
+  "sales-new-gross",
+  "sales-used-gross",
+  "sales-front-gross",
+  "sales-back-gross",
+  "service-cp-labour",
+]);
+
+/** Per-department cards: allow new/used; front/back only when forecast target is credible. */
+const EXCLUDE_DEPT_BEST_WORST = new Set([
+  "sales-gross-per-copy",
+  "sales-front-gross",
+  "sales-back-gross",
+  "service-cp-labour",
+]);
+
+function lineEligibleForBestWorst(line: GrossLineTracking, exclude: Set<string>): boolean {
+  if (line.gapToTarget === null) return false;
+  if (exclude.has(line.id)) return false;
+  const tracking = line.trackingGross ?? 0;
+  const target = line.targetGross;
+  if (target > 0 && target < 1000 && tracking > 10_000) return false;
+  return true;
+}
+
+function pickBestWorstFromEligible(eligible: GrossLineTracking[]): {
+  best: GrossLineTracking | null;
+  worst: GrossLineTracking | null;
+} {
+  if (!eligible.length) return { best: null, worst: null };
+
+  const byBest = eligible.slice().sort((a, b) => (b.gapToTarget ?? 0) - (a.gapToTarget ?? 0));
+  const byWorst = eligible.slice().sort((a, b) => (a.gapToTarget ?? 0) - (b.gapToTarget ?? 0));
+
+  let best = byBest[0] ?? null;
+  let worst = byWorst[0] ?? null;
+
+  if (best && worst && best.id === worst.id) {
+    best = byBest.find((line) => line.id !== worst.id) ?? best;
+    if (best.id === worst.id) {
+      worst = byWorst.find((line) => line.id !== best.id) ?? worst;
+    }
+  }
+
+  return { best, worst };
+}
+
+function pickStoreBestWorstLines(lines: GrossLineTracking[]) {
+  return pickBestWorstFromEligible(lines.filter((line) => lineEligibleForBestWorst(line, EXCLUDE_STORE_BEST_WORST)));
+}
+
+function pickDepartmentBestWorstLines(lines: GrossLineTracking[]) {
+  let eligible = lines.filter((line) => lineEligibleForBestWorst(line, EXCLUDE_DEPT_BEST_WORST));
+  const subLines = eligible.filter((line) => line.id !== "sales-total-gross" && line.id !== "service-total-gross" && line.id !== "parts-total-gross");
+  if (subLines.length >= 2) {
+    eligible = subLines;
+  }
+
+  const behind = eligible.filter((line) => (line.gapToTarget ?? 0) < 0);
+  const ahead = eligible.filter((line) => (line.gapToTarget ?? 0) > 0);
+  if (behind.length && ahead.length) {
+    const worst = behind.reduce((a, b) => ((a.gapToTarget ?? 0) < (b.gapToTarget ?? 0) ? a : b));
+    const best = ahead.reduce((a, b) => ((a.gapToTarget ?? 0) > (b.gapToTarget ?? 0) ? a : b));
+    return { best, worst };
+  }
+
+  return pickBestWorstFromEligible(eligible);
+}
+
 function toBestWorst(line: GrossLineTracking | null | undefined): BestWorstTrackingLine | null {
   if (!line) return null;
   return {
@@ -173,18 +423,7 @@ function departmentFromLines(department: MonthlyGrossDepartment, lines: GrossLin
   const targetGross = totalLine ? totalLine.targetGross : lines.reduce((sum, line) => sum + line.targetGross, 0);
   const gapToTarget = trackingGross === null ? null : trackingGross - targetGross;
   const pacePercent = trackingGross === null || targetGross <= 0 ? null : (trackingGross / targetGross) * 100;
-  const bestLine = lines.length
-    ? lines
-        .filter((line) => line.gapToTarget !== null)
-        .slice()
-        .sort((a, b) => (b.gapToTarget ?? 0) - (a.gapToTarget ?? 0))[0]
-    : null;
-  const worstLine = lines.length
-    ? lines
-        .filter((line) => line.gapToTarget !== null)
-        .slice()
-        .sort((a, b) => (a.gapToTarget ?? 0) - (b.gapToTarget ?? 0))[0]
-    : null;
+  const { best: bestLine, worst: worstLine } = pickDepartmentBestWorstLines(lines);
   const warnings = lines.map((line) => line.warning).filter((w): w is string => Boolean(w));
   return {
     department,
@@ -277,15 +516,32 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
 
   const monthlySalesDeals = input.sales.data.filter((deal) => {
     const d = new Date(deal.date);
-    return d.getFullYear() === year && d.getMonth() + 1 === month;
+    return d.getFullYear() === year && d.getMonth() + 1 === month && deal.status === "delivered";
   });
 
-  const salesNewGross = monthlySalesDeals.filter((d) => d.dealType === "new").reduce((sum, d) => sum + safe(d.totalGross), 0);
-  const salesUsedGross = monthlySalesDeals.filter((d) => d.dealType === "used").reduce((sum, d) => sum + safe(d.totalGross), 0);
+  const salesGrossMetrics = input.sales.summary?.grossLineMetrics;
   const salesFrontGross = monthlySalesDeals.reduce((sum, d) => sum + safe(d.frontGross), 0);
   const salesBackGross = monthlySalesDeals.reduce((sum, d) => sum + safe(d.backGross), 0);
   const salesTotalGrossFromDeals = monthlySalesDeals.reduce((sum, d) => sum + safe(d.totalGross), 0);
   const salesTotalGross = safe(input.sales.summary?.actualGross) || salesTotalGrossFromDeals;
+  const salesNewUnits = safe(input.sales.summary?.newUnits);
+  const salesUsedUnits = safe(input.sales.summary?.usedUnits);
+  const { newGross: dealNewRaw, usedGross: dealUsedRaw } = sumDealGrossByType(monthlySalesDeals);
+  const { newGross: dealNewAllocated, usedGross: dealUsedAllocated } = allocateUnclassifiedDealGross(
+    monthlySalesDeals,
+    salesNewUnits,
+    salesUsedUnits,
+  );
+  const { newActual: salesNewGross, usedActual: salesUsedGross, method: salesActualMethod } = resolveSalesNewUsedActualGross({
+    sheetTotalActual: salesTotalGross,
+    metrics: salesGrossMetrics,
+    dealNewRaw,
+    dealUsedRaw,
+    dealNewAllocated,
+    dealUsedAllocated,
+    newUnits: salesNewUnits,
+    usedUnits: salesUsedUnits,
+  });
   const grossPerCopy = monthlySalesDeals.length > 0 ? salesTotalGross / monthlySalesDeals.length : null;
 
   /** Align front/back *tracking* with sales sheet "Tracking gross" by MTD mix so gaps match the scorecard (deal run-rate alone often undercounts front vs DMS). */
@@ -301,32 +557,54 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
   const salesBackTrackingShare =
     sheetSalesTracking !== null && frontBackMtd > 0 ? sheetSalesTracking * (salesBackGross / frontBackMtd) : null;
 
+  const newVehicleTarget = lineForecastTarget("Sales", "New Vehicle Gross", salesTarget * 0.45);
+  const usedVehicleTarget = lineForecastTarget("Sales", "Used Vehicle Gross", salesTarget * 0.55);
+  const {
+    newTracking: salesNewTrackingOverride,
+    usedTracking: salesUsedTrackingOverride,
+    method: salesTrackingMethod,
+  } = resolveNewUsedSalesTracking({
+    metrics: salesGrossMetrics,
+    sheetTotal: sheetSalesTracking,
+    newTarget: newVehicleTarget,
+    usedTarget: usedVehicleTarget,
+    newActual: salesNewGross,
+    usedActual: salesUsedGross,
+    dealNewRaw,
+    dealUsedRaw,
+    sheetTotalActual: salesTotalGross,
+    daysUsed,
+    daysAvailable,
+  });
+
   const salesLines: GrossLineTracking[] = [
     toLine({
       id: "sales-new-gross",
       department: "Sales",
       label: "New Vehicle Gross",
       actualGross: salesNewGross,
-      targetGross: lineForecastTarget("Sales", "New Vehicle Gross", salesTarget * 0.45),
+      targetGross: salesSheetLineForecast(salesGrossMetrics?.newVehicle, newVehicleTarget),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
-      source: "Parsed sales deals",
-      explanation: "New-vehicle gross vs forecast row when matched; otherwise modeled share of department target.",
+      source: "Sales Daily Log gross grid + annual forecast",
+      explanation: `New-vehicle gross: MTD from ${salesActualMethod}. Tracking: ${salesTrackingMethod}. Target from 2026 Forecast when matched.`,
+      trackingOverride: salesNewTrackingOverride,
     }),
     toLine({
       id: "sales-used-gross",
       department: "Sales",
       label: "Used Vehicle Gross",
       actualGross: salesUsedGross,
-      targetGross: lineForecastTarget("Sales", "Used Vehicle Gross", salesTarget * 0.55),
+      targetGross: salesSheetLineForecast(salesGrossMetrics?.usedVehicle, usedVehicleTarget),
       daysUsed,
       daysAvailable,
       sourceMonthMatches: Boolean(salesLineage?.monthAligned),
       actualReliable: reliableFromLineage(salesLineage),
-      source: "Parsed sales deals",
-      explanation: "Used-vehicle gross vs forecast row when matched; otherwise modeled share of department target.",
+      source: "Sales Daily Log gross grid + annual forecast",
+      explanation: `Used-vehicle gross: MTD from ${salesActualMethod}. Tracking: ${salesTrackingMethod}. Target from 2026 Forecast when matched.`,
+      trackingOverride: salesUsedTrackingOverride,
     }),
     toLine({
       id: "sales-front-gross",
@@ -545,6 +823,40 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
       trackingOverride: sheetLineTracking(partsMetrics?.internal),
     }),
     toLine({
+      id: "parts-wholesale-gross",
+      department: "Parts",
+      label: "Wholesale Gross",
+      actualGross: safe(input.parts.summary.gross.wholesale ?? 0),
+      targetGross: sheetLineForecast(
+        partsMetrics?.wholesale,
+        lineForecastTarget("Parts", "Wholesale Gross", partsTarget * 0.11),
+      ),
+      daysUsed,
+      daysAvailable,
+      sourceMonthMatches: Boolean(partsLineage?.monthAligned),
+      actualReliable: reliableFromLineage(partsLineage),
+      source: "Parsed parts summary",
+      explanation: "Wholesale parts gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(partsMetrics?.wholesale),
+    }),
+    toLine({
+      id: "parts-gog-gross",
+      department: "Parts",
+      label: "GOG Gross",
+      actualGross: safe(input.parts.summary.gross.gog ?? 0),
+      targetGross: sheetLineForecast(
+        partsMetrics?.gog,
+        lineForecastTarget("Parts", "GOG Gross", partsTarget * 0.08),
+      ),
+      daysUsed,
+      daysAvailable,
+      sourceMonthMatches: Boolean(partsLineage?.monthAligned),
+      actualReliable: reliableFromLineage(partsLineage),
+      source: "Parsed parts summary",
+      explanation: "GOG parts gross: workbook forecast/tracking when parsed.",
+      trackingOverride: sheetLineTracking(partsMetrics?.gog),
+    }),
+    toLine({
       id: "parts-total-gross",
       department: "Parts",
       label: "Total Parts Gross",
@@ -565,44 +877,6 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
           : undefined,
     }),
   ];
-
-  const categoryLines = input.parts.categoryBreakdown ?? [];
-  const wholesale = categoryLines.find((c) => /wholesale/i.test(c.category));
-  if (wholesale) {
-    partsLines.push(
-      toLine({
-        id: "parts-wholesale-gross",
-        department: "Parts",
-        label: "Wholesale Gross",
-        actualGross: safe(wholesale.gross),
-        targetGross: safe(wholesale.gross),
-        daysUsed: Math.max(daysUsed, 1),
-        daysAvailable: Math.max(daysUsed, 1),
-        sourceMonthMatches: Boolean(partsLineage?.monthAligned),
-        actualReliable: reliableFromLineage(partsLineage),
-        source: "Parsed parts category breakdown",
-        explanation: "Low-confidence line from category breakdown (wholesale).",
-      }),
-    );
-  }
-  const gog = categoryLines.find((c) => /gog/i.test(c.category));
-  if (gog) {
-    partsLines.push(
-      toLine({
-        id: "parts-gog-gross",
-        department: "Parts",
-        label: "GOG Gross",
-        actualGross: safe(gog.gross),
-        targetGross: safe(gog.gross),
-        daysUsed: Math.max(daysUsed, 1),
-        daysAvailable: Math.max(daysUsed, 1),
-        sourceMonthMatches: Boolean(partsLineage?.monthAligned),
-        actualReliable: reliableFromLineage(partsLineage),
-        source: "Parsed parts category breakdown",
-        explanation: "Low-confidence line from category breakdown (GOG).",
-      }),
-    );
-  }
 
   const FORECAST_LINES_CAP = 80;
   const forecastLines: GrossLineTracking[] = (() => {
@@ -639,26 +913,8 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     departmentFromLines("Parts", partsLines),
   ];
 
-  /**
-   * Excluded from best/worst: deal-only splits without workbook tracking, desk proxies,
-   * and forecast-tab reference rows (operational lines use Sales/Service/Parts sheets).
-   */
-  const EXCLUDE_FROM_BEST_WORST = new Set([
-    "sales-gross-per-copy",
-    "sales-new-gross",
-    "sales-used-gross",
-    "sales-front-gross",
-    "sales-back-gross",
-    "service-cp-labour",
-    "parts-wholesale-gross",
-    "parts-gog-gross",
-  ]);
-
   const allLines = [...departments.flatMap((d) => d.lines)].filter(
-    (line) =>
-      line.gapToTarget !== null &&
-      line.department !== "Forecast" &&
-      !EXCLUDE_FROM_BEST_WORST.has(line.id),
+    (line) => line.department !== "Forecast" && lineEligibleForBestWorst(line, EXCLUDE_STORE_BEST_WORST),
   );
   const bestTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (b.gapToTarget ?? 0) - (a.gapToTarget ?? 0))[0]);
   const worstTrackingLine = toBestWorst(allLines.slice().sort((a, b) => (a.gapToTarget ?? 0) - (b.gapToTarget ?? 0))[0]);

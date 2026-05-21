@@ -209,6 +209,7 @@ export function LiveDashboardViewV2() {
           <LiveDashboardExpandedInsights
             worst={worst}
             best={best}
+            departments={monthly.departments.filter((d) => d.department !== "Forecast")}
             operationalSignals={operationalSignals}
             opportunityRadar={data.opportunityRadar}
             keyActions={data.keyActions}

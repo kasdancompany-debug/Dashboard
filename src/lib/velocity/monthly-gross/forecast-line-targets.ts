@@ -137,6 +137,8 @@ const LINE_NEEDLES: Record<string, string[]> = {
   "Parts:Customer Gross": ["parts customer gross", "customer gross parts", "parts customer", "customer parts gross"],
   "Parts:Warranty Gross": ["parts warranty gross", "warranty gross parts", "parts warranty"],
   "Parts:Internal Gross": ["parts internal gross", "internal gross parts", "parts internal"],
+  "Parts:Wholesale Gross": ["parts wholesale gross", "wholesale gross parts", "wholesale gross"],
+  "Parts:GOG Gross": ["parts gog gross", "gog gross parts", "gog gross"],
   "Parts:Total Parts Gross": ["total parts gross", "parts gross total", "parts total gross", "total gross parts"],
 };
 

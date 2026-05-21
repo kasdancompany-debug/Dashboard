@@ -15,6 +15,39 @@ export type OpportunityRadarItem = {
   estimatedImpact: string;
   department: "Sales" | "Service" | "Parts" | "Store";
   confidence: OpportunityRadarConfidence;
+  /** Where this recommendation was grounded (shown in UI). */
+  source: string;
+};
+
+export type DepartmentRadarTakeaway = {
+  department: "Sales" | "Service" | "Parts";
+  focusLine: string | null;
+  focusGap: string | null;
+  strengthLine: string | null;
+  strengthGap: string | null;
+  source: string;
+};
+
+export type OpportunityRadarBundle = {
+  items: OpportunityRadarItem[];
+  departmentTakeaways: DepartmentRadarTakeaway[];
+  /** One-line preview when the section is collapsed. */
+  summaryLine: string;
+};
+
+export type AtRiskDealRadarInput = {
+  customer: string;
+  vehicle: string;
+  reasons: string[];
+  recommendedAction: string;
+  estimatedRecoverableGross: number;
+  riskLevel: "low" | "medium" | "high";
+};
+
+const ROLE_LABEL: Record<OpportunityRadarRole, string> = {
+  dollar: "Highest $",
+  operational: "Fastest fix",
+  defensive: "Defend",
 };
 
 type RadarDept = OpportunityRadarItem["department"];
@@ -33,6 +66,12 @@ type ActionQueueRow = {
   severity: "low" | "medium" | "high";
 };
 
+const DEPT_SHEET_SOURCE: Record<"Sales" | "Service" | "Parts", string> = {
+  Sales: "Daily Log (sales sheet)",
+  Service: "Service daily tracking sheet",
+  Parts: "Parts daily tracking sheet",
+};
+
 function compactImpactDollars(gapOrImpact: number): string {
   const abs = Math.abs(gapOrImpact);
   if (!Number.isFinite(abs) || abs < 500) return "Protects month-end gross pace";
@@ -45,6 +84,13 @@ function queueImpactDollars(dollars: number): string {
   const low = Math.round(dollars * 0.65);
   const high = Math.round(dollars * 1.15);
   return `$${low.toLocaleString()}–$${high.toLocaleString()} est.`;
+}
+
+function formatGap(gap: number | null | undefined): string | null {
+  if (gap === null || gap === undefined || !Number.isFinite(gap)) return null;
+  const abs = Math.round(Math.abs(gap));
+  const sign = gap < 0 ? "behind" : gap > 0 ? "ahead" : "on";
+  return `${sign === "on" ? "on plan" : `$${abs.toLocaleString()} ${sign}`}`;
 }
 
 function deptConfidence(dept: DepartmentGrossTracking | undefined, staleWarnings: boolean): OpportunityRadarConfidence {
@@ -66,6 +112,10 @@ function normalizeDept(department: string): RadarDept {
   return "Store";
 }
 
+function sheetSource(dept: "Sales" | "Service" | "Parts", detail: string): string {
+  return `${DEPT_SHEET_SOURCE[dept]} · ${detail}`;
+}
+
 function addCandidate(pool: Candidate[], candidate: Candidate) {
   if (pool.some((c) => c.id === candidate.id)) return;
   pool.push(candidate);
@@ -76,11 +126,25 @@ function pickByRole(pool: Candidate[], role: OpportunityRadarRole, used: Set<str
     role === "dollar" ? "dollarScore" : role === "operational" ? "operationalScore" : "defensiveScore";
   const ranked = pool
     .filter((c) => c[scoreKey] > 0 && !used.has(c.id))
-    .sort((a, b) => b[scoreKey] - a[scoreKey] || b.dollarScore - a.dollarScore);
+    .sort((a, b) => {
+      const scoreDiff = b[scoreKey] - a[scoreKey];
+      if (scoreDiff !== 0) return scoreDiff;
+      const aSheet = a.source.includes("daily") || a.source.includes("Daily Log") ? 1 : 0;
+      const bSheet = b.source.includes("daily") || b.source.includes("Daily Log") ? 1 : 0;
+      return bSheet - aSheet || b.dollarScore - a.dollarScore;
+    });
   const top = ranked[0];
   if (!top) return null;
   used.add(top.id);
-  return { id: top.id, role, title: top.title, estimatedImpact: top.estimatedImpact, department: top.department, confidence: top.confidence };
+  return {
+    id: top.id,
+    role,
+    title: top.title,
+    estimatedImpact: top.estimatedImpact,
+    department: top.department,
+    confidence: top.confidence,
+    source: top.source,
+  };
 }
 
 const FALLBACKS: Record<OpportunityRadarRole, OpportunityRadarItem> = {
@@ -91,6 +155,7 @@ const FALLBACKS: Record<OpportunityRadarRole, OpportunityRadarItem> = {
     estimatedImpact: "Prioritize the dept with the biggest $ gap to target",
     department: "Store",
     confidence: "Low",
+    source: "Store rollup · no strong signal",
   },
   operational: {
     id: "fallback-operational",
@@ -99,6 +164,7 @@ const FALLBACKS: Record<OpportunityRadarRole, OpportunityRadarItem> = {
     estimatedImpact: "Advisor hours and parts counter push — fastest levers",
     department: "Store",
     confidence: "Low",
+    source: "Store rollup · no strong signal",
   },
   defensive: {
     id: "fallback-defensive",
@@ -107,23 +173,108 @@ const FALLBACKS: Record<OpportunityRadarRole, OpportunityRadarItem> = {
     estimatedImpact: "Hold discipline on strength lines while recovering gaps",
     department: "Store",
     confidence: "Medium",
+    source: "Store rollup · no strong signal",
   },
 };
 
-/** Top 3 recovery opportunities for Expanded insights — ranked by role, not a single sort. */
+function truncate(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function buildRadarSummaryLine(items: OpportunityRadarItem[]): string {
+  if (!items.length) return "No recovery plays ranked for this month";
+  return items
+    .map((item) => {
+      const short = truncate(item.title, 36);
+      return `${ROLE_LABEL[item.role]}: ${short}`;
+    })
+    .join(" · ");
+}
+
+/** One specific desk play from the top flagged deal — not a store-wide recoverable total. */
+function addTopAtRiskDealCandidate(pool: Candidate[], deals: AtRiskDealRadarInput[]) {
+  const flagged = deals
+    .filter((d) => d.estimatedRecoverableGross > 0)
+    .slice()
+    .sort((a, b) => b.estimatedRecoverableGross - a.estimatedRecoverableGross);
+  if (!flagged.length) return;
+
+  const top = flagged[0]!;
+  const count = flagged.length;
+  const reason = top.reasons.find((r) => r && !/no material/i.test(r)) ?? top.reasons[0] ?? "Deal structure risk";
+  const vehicle = truncate(top.vehicle || "unit", 28);
+  const customer = truncate(top.customer || "Customer", 24);
+
+  const title =
+    count === 1
+      ? `Desk: ${customer} (${vehicle})`
+      : `Desk: ${customer} (${vehicle}) — ${count - 1} more flagged`;
+
+  const actionHint = truncate(
+    top.recommendedAction.replace(/\.$/, "") || "Re-structure before funding",
+    72,
+  );
+
+  const unitRecovery = Math.round(top.estimatedRecoverableGross);
+  const estimatedImpact =
+    unitRecovery >= 500
+      ? `~$${unitRecovery.toLocaleString()} on this unit if ${actionHint.toLowerCase()}`
+      : `Resolve ${truncate(reason, 48)} before delivery`;
+
+  addCandidate(pool, {
+    id: `at-risk-deal-${customer.toLowerCase().replace(/\s+/g, "-")}`,
+    role: "operational",
+    title,
+    estimatedImpact,
+    department: "Sales",
+    confidence: top.riskLevel === "high" ? "Medium" : "Medium",
+    source:
+      count === 1
+        ? `Daily Log · 1 at-risk deal (${truncate(reason, 40)})`
+        : `Daily Log · ${count} at-risk deals (top: ${truncate(reason, 32)})`,
+    dollarScore: unitRecovery * 0.25,
+    operationalScore: unitRecovery + (top.riskLevel === "high" ? 2000 : 800),
+    defensiveScore: 0,
+  });
+}
+
+function buildDepartmentTakeaways(
+  monthly: MonthlyGrossTracking,
+  stale: boolean,
+): DepartmentRadarTakeaway[] {
+  const order: Array<"Sales" | "Service" | "Parts"> = ["Sales", "Service", "Parts"];
+  return order.map((name) => {
+    const dept = monthly.departments.find((d) => d.department === name);
+    const worst = dept?.worstLine ?? null;
+    const best = dept?.bestLine ?? null;
+    return {
+      department: name,
+      focusLine: worst?.label ?? null,
+      focusGap: formatGap(worst?.gapToTarget),
+      strengthLine: best?.label ?? null,
+      strengthGap: formatGap(best?.gapToTarget),
+      source: stale ? `${DEPT_SHEET_SOURCE[name]} (verify tab month)` : DEPT_SHEET_SOURCE[name],
+    };
+  });
+}
+
+/** Top 3 store recovery plays + per-department focus/strength from workbook lines. */
 export function buildOpportunityRadar(params: {
   monthly: MonthlyGrossTracking;
   actionQueue: ActionQueueRow[];
   primaryThreat: { title: string; department: string; impact?: number } | null;
-  recoverableToday: number;
+  atRiskDeals: AtRiskDealRadarInput[];
   staleWarnings: string[];
-}): OpportunityRadarItem[] {
+}): OpportunityRadarBundle {
   const pool: Candidate[] = [];
   const stale = params.staleWarnings.length > 0;
 
   for (const dept of params.monthly.departments) {
     if (dept.department === "Forecast") continue;
     const radarDept = dept.department as RadarDept;
+    if (radarDept === "Store") continue;
     const gap = dept.gapToTarget;
     const pace = dept.pacePercent;
 
@@ -151,6 +302,7 @@ export function buildOpportunityRadar(params: {
         estimatedImpact: compactImpactDollars(gap),
         department: radarDept,
         confidence: deptConfidence(dept, stale),
+        source: sheetSource(dept.department, "department total vs target"),
         dollarScore: absGap,
         operationalScore,
         defensiveScore: 0,
@@ -165,9 +317,43 @@ export function buildOpportunityRadar(params: {
         estimatedImpact: `~$${Math.round(gap).toLocaleString()} cushion to protect`,
         department: radarDept,
         confidence: deptConfidence(dept, stale),
+        source: sheetSource(dept.department, "department total ahead of target"),
         dollarScore: 0,
         operationalScore: 0,
         defensiveScore: gap,
+      });
+    }
+
+    const worst = dept.worstLine;
+    if (worst && worst.gapToTarget !== null && Number.isFinite(worst.gapToTarget) && worst.gapToTarget < -1000) {
+      const absGap = Math.abs(worst.gapToTarget);
+      addCandidate(pool, {
+        id: `dept-worst-line-${dept.department.toLowerCase()}-${worst.label.toLowerCase().replace(/\s+/g, "-")}`,
+        role: "dollar",
+        title: `Stabilize ${worst.label}`,
+        estimatedImpact: compactImpactDollars(worst.gapToTarget),
+        department: radarDept,
+        confidence: lineConfidence(worst, stale),
+        source: sheetSource(dept.department, `line: ${worst.label}`),
+        dollarScore: absGap * 1.08,
+        operationalScore: absGap * 0.5,
+        defensiveScore: 0,
+      });
+    }
+
+    const best = dept.bestLine;
+    if (best && best.gapToTarget !== null && Number.isFinite(best.gapToTarget) && best.gapToTarget > 1500) {
+      addCandidate(pool, {
+        id: `dept-best-line-${dept.department.toLowerCase()}-${best.label.toLowerCase().replace(/\s+/g, "-")}`,
+        role: "defensive",
+        title: `Protect ${best.label} in ${dept.department}`,
+        estimatedImpact: `~$${Math.round(best.gapToTarget).toLocaleString()} ahead on this line`,
+        department: radarDept,
+        confidence: lineConfidence(best, stale),
+        source: sheetSource(dept.department, `line: ${best.label}`),
+        dollarScore: 0,
+        operationalScore: 0,
+        defensiveScore: best.gapToTarget * 1.05,
       });
     }
 
@@ -188,42 +374,52 @@ export function buildOpportunityRadar(params: {
         estimatedImpact: compactImpactDollars(gap),
         department: "Service",
         confidence: deptConfidence(dept, stale),
-        dollarScore: Math.abs(gap) * 0.5,
+        source: sheetSource("Service", "pace 85–99% — throughput lever"),
+        dollarScore: Math.abs(gap) * 0.45,
         operationalScore: Math.abs(gap) + (100 - pace) * 800,
         defensiveScore: 0,
       });
     }
   }
 
-  const worst = params.monthly.worstTrackingLine;
-  if (worst && worst.gapToTarget !== null && Number.isFinite(worst.gapToTarget) && worst.gapToTarget < -1000) {
-    const absGap = Math.abs(worst.gapToTarget);
-    const isUsed = /used/i.test(worst.label);
+  const storeWorst = params.monthly.worstTrackingLine;
+  if (storeWorst && storeWorst.gapToTarget !== null && Number.isFinite(storeWorst.gapToTarget) && storeWorst.gapToTarget < -1000) {
+    const absGap = Math.abs(storeWorst.gapToTarget);
+    const dept = normalizeDept(storeWorst.department);
     addCandidate(pool, {
-      id: `line-worst-${worst.label.toLowerCase().replace(/\s+/g, "-")}`,
+      id: `store-worst-line-${storeWorst.label.toLowerCase().replace(/\s+/g, "-")}`,
       role: "dollar",
-      title: isUsed ? "Used gross quality — stabilize the line" : `Stabilize ${worst.label}`,
-      estimatedImpact: compactImpactDollars(worst.gapToTarget),
-      department: normalizeDept(worst.department),
-      confidence: lineConfidence(worst, stale),
-      dollarScore: absGap * 1.05,
-      operationalScore: isUsed ? absGap * 0.55 : absGap * 0.35,
+      title: `Store priority: stabilize ${storeWorst.label}`,
+      estimatedImpact: compactImpactDollars(storeWorst.gapToTarget),
+      department: dept,
+      confidence: lineConfidence(storeWorst, stale),
+      source:
+        dept === "Store"
+          ? "Store rollup · worst tracking line"
+          : sheetSource(dept, `store-wide worst line: ${storeWorst.label}`),
+      dollarScore: absGap * 1.1,
+      operationalScore: absGap * 0.4,
       defensiveScore: 0,
     });
   }
 
-  const best = params.monthly.bestTrackingLine;
-  if (best && best.gapToTarget !== null && Number.isFinite(best.gapToTarget) && best.gapToTarget > 1500) {
+  const storeBest = params.monthly.bestTrackingLine;
+  if (storeBest && storeBest.gapToTarget !== null && Number.isFinite(storeBest.gapToTarget) && storeBest.gapToTarget > 1500) {
+    const dept = normalizeDept(storeBest.department);
     addCandidate(pool, {
-      id: `line-best-${best.label.toLowerCase().replace(/\s+/g, "-")}`,
+      id: `store-best-line-${storeBest.label.toLowerCase().replace(/\s+/g, "-")}`,
       role: "defensive",
-      title: `Protect ${best.label} — replicate the discipline`,
-      estimatedImpact: `~$${Math.round(best.gapToTarget).toLocaleString()} ahead on this line`,
-      department: normalizeDept(best.department),
-      confidence: lineConfidence(best, stale),
+      title: `Store strength: protect ${storeBest.label}`,
+      estimatedImpact: `~$${Math.round(storeBest.gapToTarget).toLocaleString()} ahead on this line`,
+      department: dept,
+      confidence: lineConfidence(storeBest, stale),
+      source:
+        dept === "Store"
+          ? "Store rollup · best tracking line"
+          : sheetSource(dept, `store-wide best line: ${storeBest.label}`),
       dollarScore: 0,
       operationalScore: 0,
-      defensiveScore: best.gapToTarget * 1.1,
+      defensiveScore: storeBest.gapToTarget * 1.1,
     });
   }
 
@@ -236,8 +432,9 @@ export function buildOpportunityRadar(params: {
       estimatedImpact: impact > 0 ? queueImpactDollars(impact) : compactImpactDollars(-8000),
       department: normalizeDept(params.primaryThreat.department),
       confidence: impact > 0 && !stale ? "High" : stale ? "Low" : "Medium",
-      dollarScore: Math.max(impact, 6000),
-      operationalScore: impact > 0 && impact < 12_000 ? impact * 1.2 : impact * 0.4,
+      source: "Velocity engine · primary profit threat",
+      dollarScore: Math.max(impact, 5000),
+      operationalScore: impact > 0 && impact < 12_000 ? impact * 1.1 : impact * 0.35,
       defensiveScore: 0,
     });
   }
@@ -255,28 +452,23 @@ export function buildOpportunityRadar(params: {
       estimatedImpact: queueImpactDollars(impact),
       department: dept,
       confidence: impact > 0 && !stale ? "High" : stale ? "Low" : "Medium",
-      dollarScore: impact,
-      operationalScore: fast ? impact * 1.15 + (row.severity === "high" ? 2500 : 800) : impact * 0.25,
+      source: "Velocity engine · ranked action queue",
+      dollarScore: impact * 0.75,
+      operationalScore: fast ? impact * 1.15 + (row.severity === "high" ? 2500 : 800) : impact * 0.2,
       defensiveScore: 0,
     });
   }
 
-  if (params.recoverableToday > 1500) {
-    addCandidate(pool, {
-      id: "recoverable-today",
-      role: "dollar",
-      title: "Capture recoverable gross in the closing window",
-      estimatedImpact: queueImpactDollars(params.recoverableToday),
-      department: "Store",
-      confidence: stale ? "Medium" : "High",
-      dollarScore: params.recoverableToday,
-      operationalScore: params.recoverableToday * 0.6,
-      defensiveScore: 0,
-    });
-  }
+  addTopAtRiskDealCandidate(pool, params.atRiskDeals);
 
   const sales = params.monthly.departments.find((d) => d.department === "Sales");
-  if (sales?.pacePercent !== null && sales?.pacePercent !== undefined && Number.isFinite(sales.pacePercent) && sales.pacePercent >= 98) {
+  if (
+    sales?.pacePercent !== null &&
+    sales?.pacePercent !== undefined &&
+    Number.isFinite(sales.pacePercent) &&
+    sales.pacePercent >= 98 &&
+    (sales.gapToTarget ?? 0) >= 0
+  ) {
     addCandidate(pool, {
       id: "defend-sales-front",
       role: "defensive",
@@ -284,13 +476,20 @@ export function buildOpportunityRadar(params: {
       estimatedImpact: "Hold desk minimums — don't buy rate with gross",
       department: "Sales",
       confidence: deptConfidence(sales, stale),
+      source: sheetSource("Sales", "department at/above pace"),
       dollarScore: 0,
       operationalScore: 0,
-      defensiveScore: (sales.gapToTarget ?? 0) > 0 ? (sales.gapToTarget ?? 0) + 4000 : 7500,
+      defensiveScore: (sales.gapToTarget ?? 0) > 0 ? (sales.gapToTarget ?? 0) + 4000 : 6000,
     });
   }
 
   const used = new Set<string>();
   const roles: OpportunityRadarRole[] = ["dollar", "operational", "defensive"];
-  return roles.map((role) => pickByRole(pool, role, used) ?? { ...FALLBACKS[role] });
+  const items = roles.map((role) => pickByRole(pool, role, used) ?? { ...FALLBACKS[role] });
+
+  return {
+    items,
+    departmentTakeaways: buildDepartmentTakeaways(params.monthly, stale),
+    summaryLine: buildRadarSummaryLine(items),
+  };
 }

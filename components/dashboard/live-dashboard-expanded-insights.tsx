@@ -13,6 +13,7 @@ import {
   CircleAlert,
   Clock3,
   Eye,
+  ChevronDown,
   Radar,
   Target,
   TrendingDown,
@@ -25,7 +26,7 @@ import { cn } from "@/lib/utils";
 import type { VelocityData } from "@/src/lib/velocity/get-velocity-data";
 import type { BestWorstTrackingLine, DepartmentGrossTracking, MonthlyGrossDepartment } from "@/src/lib/velocity/monthly-gross/types";
 import type { ExpandedInsightsKeyAction, KeyActionStatus } from "@/src/lib/dashboard/expanded-insights-key-actions";
-import type { OpportunityRadarItem } from "@/src/lib/dashboard/opportunity-radar";
+import type { OpportunityRadarBundle, OpportunityRadarItem } from "@/src/lib/dashboard/opportunity-radar";
 import {
   ExecSection,
   gapTone,
@@ -120,6 +121,35 @@ function deptLineSurface(department: MonthlyGrossDepartment | undefined, kind: "
 function gapMeterPercent(tracking: number | null, target: number) {
   if (tracking === null || !Number.isFinite(tracking) || target <= 0) return null;
   return Math.min(130, Math.max(0, (tracking / target) * 100));
+}
+
+const TRACKING_DEPT_ORDER = ["Sales", "Service", "Parts"] as const;
+
+function TrackingLinePair({ worst, best }: { worst: BestWorstTrackingLine | null; best: BestWorstTrackingLine | null }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <LineFocusCard kind="focus" line={worst} />
+      <LineFocusCard kind="strength" line={best} />
+    </div>
+  );
+}
+
+function DepartmentTrackingLineRows({ departments }: { departments: DepartmentGrossTracking[] }) {
+  const rows = TRACKING_DEPT_ORDER.map((name) => departments.find((d) => d.department === name)).filter(
+    (d): d is DepartmentGrossTracking => Boolean(d),
+  );
+  if (!rows.length) return null;
+
+  return (
+    <div className="space-y-4 border-t border-white/[0.06] pt-4">
+      {rows.map((dept) => (
+        <div key={dept.department} className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{dept.department}</p>
+          <TrackingLinePair worst={dept.worstLine} best={dept.bestLine} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function LineFocusCard({ kind, line }: { kind: "focus" | "strength"; line: BestWorstTrackingLine | null }) {
@@ -345,40 +375,140 @@ function ActionCard({ item, index }: { item: ExpandedInsightsKeyAction; index: n
   );
 }
 
-function OpportunityRadarSection({ items }: { items: OpportunityRadarItem[] }) {
+function OpportunityRadarCard({ item }: { item: OpportunityRadarItem }) {
+  return (
+    <li className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 ring-1 ring-inset ring-white/[0.06]">
+      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-violet-300/90">{RADAR_ROLE_LABEL[item.role]}</p>
+      <p className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">{item.title}</p>
+      <p className="mt-1 font-mono text-[11px] font-medium leading-snug text-violet-200/90">{item.estimatedImpact}</p>
+      <p className="mt-1.5 text-[10px] leading-snug text-slate-500">
+        <span className="font-semibold text-slate-400">Source:</span> {item.source}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span
+          className={cn(
+            "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ring-1 ring-inset",
+            DEPT_PILL[item.department],
+          )}
+        >
+          {item.department}
+        </span>
+        <span
+          className={cn(
+            "rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
+            CONFIDENCE_PILL[item.confidence],
+          )}
+        >
+          {item.confidence}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function OpportunityRadarSection({ radar }: { radar: OpportunityRadarBundle }) {
+  const items = radar.items ?? [];
   if (!items.length) return null;
 
+  const summaryLine = radar.summaryLine || "Opportunity radar";
+
   return (
-    <ul className="grid gap-2 sm:grid-cols-3">
-      {items.map((item) => (
-        <li
-          key={item.id}
-          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 ring-1 ring-inset ring-white/[0.06]"
-        >
-          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-violet-300/90">{RADAR_ROLE_LABEL[item.role]}</p>
-          <p className="mt-1 text-[13px] font-semibold leading-snug text-slate-100">{item.title}</p>
-          <p className="mt-1 font-mono text-[11px] font-medium leading-snug text-violet-200/90">{item.estimatedImpact}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ring-1 ring-inset",
-                DEPT_PILL[item.department],
-              )}
-            >
-              {item.department}
-            </span>
-            <span
-              className={cn(
-                "rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
-                CONFIDENCE_PILL[item.confidence],
-              )}
-            >
-              {item.confidence}
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <details className="group rounded-xl border border-white/[0.08] bg-white/[0.02] ring-1 ring-inset ring-white/[0.05]">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+        <Radar className="h-3.5 w-3.5 shrink-0 text-violet-400/90" aria-hidden />
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Opportunity radar</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-400">{summaryLine}</span>
+        <ChevronDown
+          className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180"
+          aria-hidden
+        />
+      </summary>
+
+      <div className="space-y-4 border-t border-white/[0.06] px-3.5 pb-3.5 pt-3">
+      <div className="rounded-xl border border-violet-500/20 bg-violet-950/20 px-3.5 py-3 text-[12px] leading-relaxed text-slate-400 ring-1 ring-inset ring-violet-500/10">
+        <p className="font-semibold text-violet-100/95">How Opportunity Radar is built</p>
+        <p className="mt-1.5">
+          Three <span className="text-slate-300">store-wide</span> plays are picked from the same live signals as the tracking
+          cards above — not from the annual Forecast tab alone.
+        </p>
+        <ul className="mt-2 list-inside list-disc space-y-1 text-[11px]">
+          <li>
+            <span className="text-slate-300">Highest dollar</span> — largest gross gap from Daily Log, Service, or Parts
+            (department total or worst line on that sheet).
+          </li>
+          <li>
+            <span className="text-slate-300">Fastest fix</span> — operational levers (throughput, parts counter) or a{" "}
+            <span className="text-slate-300">specific flagged deal</span> on the Daily Log (not a store-wide dollar total).
+          </li>
+          <li>
+            <span className="text-slate-300">Defensive move</span> — lines or departments already ahead of plan; protect
+            while closing gaps elsewhere.
+          </li>
+        </ul>
+        <p className="mt-2 text-[11px] text-slate-500">
+          <span className="font-semibold text-slate-400">Confidence</span> — High when the month tab matches and sheet
+          tracking/forecast parsed cleanly; Low when source warnings or stale data are present. At-risk deal $ bands are{" "}
+            <span className="text-slate-300">per unit</span>, not &quot;fix everything.&quot;
+        </p>
+      </div>
+
+      <ul className="grid gap-2 sm:grid-cols-3">
+        {items.map((item) => (
+          <OpportunityRadarCard key={item.id} item={item} />
+        ))}
+      </ul>
+
+      {radar.departmentTakeaways.length ? (
+        <div className="space-y-2 border-t border-white/[0.06] pt-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Department takeaways</p>
+          <p className="text-[11px] leading-snug text-slate-500">
+            Per-dept focus and strength come from each department&apos;s worst and best <span className="text-slate-400">line</span> on
+            that daily sheet (same rules as the dept rows under tracking lines).
+          </p>
+          <ul className="grid gap-2 md:grid-cols-3">
+            {radar.departmentTakeaways.map((row) => (
+              <li
+                key={row.department}
+                className="rounded-lg border border-white/[0.08] bg-black/25 px-3 py-2.5 text-[11px] leading-snug"
+              >
+                <span
+                  className={cn(
+                    "inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ring-1 ring-inset",
+                    DEPT_PILL[row.department],
+                  )}
+                >
+                  {row.department}
+                </span>
+                <p className="mt-2 text-slate-500">{row.source}</p>
+                <p className="mt-1.5">
+                  <span className="font-semibold text-rose-300/90">Focus:</span>{" "}
+                  {row.focusLine ? (
+                    <>
+                      {row.focusLine}
+                      {row.focusGap ? <span className="text-slate-400"> · {row.focusGap}</span> : null}
+                    </>
+                  ) : (
+                    <span className="text-slate-500">No line materially behind plan</span>
+                  )}
+                </p>
+                <p className="mt-1">
+                  <span className="font-semibold text-emerald-300/90">Strength:</span>{" "}
+                  {row.strengthLine ? (
+                    <>
+                      {row.strengthLine}
+                      {row.strengthGap ? <span className="text-slate-400"> · {row.strengthGap}</span> : null}
+                    </>
+                  ) : (
+                    <span className="text-slate-500">No line clearly ahead of plan</span>
+                  )}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -446,6 +576,7 @@ function KeyActionsDigest({ items }: { items: VelocityData["keyActions"] }) {
 export type LiveDashboardExpandedInsightsProps = {
   worst: BestWorstTrackingLine | null;
   best: BestWorstTrackingLine | null;
+  departments: DepartmentGrossTracking[];
   operationalSignals: { text: string; dot: SignalDot }[];
   opportunityRadar: VelocityData["opportunityRadar"];
   keyActions: VelocityData["keyActions"];
@@ -456,6 +587,7 @@ export type LiveDashboardExpandedInsightsProps = {
 export function LiveDashboardExpandedInsights({
   worst,
   best,
+  departments,
   operationalSignals,
   opportunityRadar,
   keyActions,
@@ -474,9 +606,12 @@ export function LiveDashboardExpandedInsights({
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <LineFocusCard kind="focus" line={worst} />
-        <LineFocusCard kind="strength" line={best} />
+      <div className="space-y-0">
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Store</p>
+          <TrackingLinePair worst={worst} best={best} />
+        </div>
+        <DepartmentTrackingLineRows departments={departments} />
       </div>
 
       <ExecSection>
@@ -487,16 +622,7 @@ export function LiveDashboardExpandedInsights({
         <SignalChips items={operationalSignals} />
       </ExecSection>
 
-      <ExecSection>
-        <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-          <Radar className="h-3.5 w-3.5 text-violet-400/90" aria-hidden />
-          Opportunity radar
-        </p>
-        <p className="mb-3 text-[12px] leading-snug text-slate-500">
-          Top recovery plays ranked by dollar, speed, and defense — scan before key actions.
-        </p>
-        <OpportunityRadarSection items={opportunityRadar ?? []} />
-      </ExecSection>
+      <OpportunityRadarSection radar={opportunityRadar ?? { items: [], departmentTakeaways: [], summaryLine: "" }} />
 
       <ExecSection>
         <p className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">

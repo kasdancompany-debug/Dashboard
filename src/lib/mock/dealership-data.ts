@@ -258,6 +258,8 @@ export const partsSummary: PartsSummary = {
   customerGross: 51200,
   warrantyGross: 20500,
   internalGross: 34300,
+  wholesaleGross: 5036,
+  gogGross: 3100,
   totalGross: 106000,
   trackingGross: 108000,
   forecastSales: 331000,

@@ -13,6 +13,7 @@ import { fetchSheetRows, isLiveDataEnabled } from "@/src/lib/google/sheets-clien
 import { parseForecastSheet, type ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import { parsePartsSheetForMonth } from "@/src/lib/parsers/parts-parser";
 import { parseSalesSheetForMonth } from "@/src/lib/parsers/sales-parser";
+import { parseSalesGrossTopMetrics } from "@/src/lib/parsers/sales-gross-top-metrics";
 import { parseServiceSheetForMonth } from "@/src/lib/parsers/service-parser";
 import { partitionFormulaDiagnostics } from "@/src/lib/parsers/parse-utils";
 import { PartsSummary, SalesSummary, ServiceAdvisorPerformance, ServiceSummary } from "@/src/lib/types/dealership";
@@ -143,6 +144,10 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
   ]);
   const salesParsed = parseSalesSheetForMonth(sales.rows, "sales", month, year);
   const salesTopSummary = deriveSalesTopSummary(sales.rows);
+  const salesGrossTopMetrics = parseSalesGrossTopMetrics(sales.rows);
+  if (salesTopSummary.totalGross !== null) salesGrossTopMetrics.total.actual = salesTopSummary.totalGross;
+  if (salesTopSummary.trackingGross !== null) salesGrossTopMetrics.total.tracking = salesTopSummary.trackingGross;
+  if (salesTopSummary.targetGross !== null) salesGrossTopMetrics.total.forecast = salesTopSummary.targetGross;
   const serviceParsed = parseServiceSheetForMonth(service.rows, "service", month, year, {
     resolvedTabName: service.tabName,
     selectedMonthKey: reportingMonth,
@@ -353,7 +358,7 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     ? { ...serviceParsed.summaries, gross: { customer: 0, warranty: 0, internal: 0, total: 0 }, actual: 0 }
     : serviceParsed.summaries;
   const effectivePartsSummary = partsExcluded
-    ? { ...partsParsed.summaries, gross: { customer: 0, warranty: 0, internal: 0, total: 0 } }
+    ? { ...partsParsed.summaries, gross: { customer: 0, warranty: 0, internal: 0, wholesale: 0, gog: 0, total: 0 } }
     : partsParsed.summaries;
   const forecastTargets = {
     Sales:
@@ -423,6 +428,7 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     targetUnits: totalUnits,
     targetGross: salesTargetGross,
     paceStatus: "on-track",
+    grossLineMetrics: salesGrossTopMetrics,
   };
 
   const serviceSummary: ServiceSummary = {
@@ -453,6 +459,8 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     customerGross: safeNumber(effectivePartsSummary.gross.customer),
     warrantyGross: safeNumber(effectivePartsSummary.gross.warranty),
     internalGross: safeNumber(effectivePartsSummary.gross.internal),
+    wholesaleGross: safeNumber(effectivePartsSummary.gross.wholesale),
+    gogGross: safeNumber(effectivePartsSummary.gross.gog),
     totalGross: safeNumber(effectivePartsSummary.gross.total),
     grossLineMetrics: effectivePartsSummary.grossMetrics,
     trackingGross: safeNumber(effectivePartsSummary.tracking),
