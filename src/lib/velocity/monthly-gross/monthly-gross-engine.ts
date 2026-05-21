@@ -158,14 +158,24 @@ function resolveSalesNewUsedActualGross(params: {
 }): { newActual: number; usedActual: number; method: string } {
   const sheetNew = params.metrics?.newVehicle.actual;
   const sheetUsed = params.metrics?.usedVehicle.actual;
+  const sheetNewTracking = params.metrics?.newVehicle.tracking;
+  const sheetUsedTracking = params.metrics?.usedVehicle.tracking;
+  const hasBreakdownTracking =
+    sheetNewTracking !== null &&
+    sheetNewTracking !== undefined &&
+    sheetNewTracking > 0 &&
+    sheetUsedTracking !== null &&
+    sheetUsedTracking !== undefined &&
+    sheetUsedTracking > 0;
   if (
+    hasBreakdownTracking &&
     sheetNew !== null &&
     sheetNew !== undefined &&
     sheetUsed !== null &&
     sheetUsed !== undefined &&
-    sheetNew + sheetUsed >= params.sheetTotalActual * 0.85
+    sheetNew + sheetUsed >= params.sheetTotalActual * 0.5
   ) {
-    return { newActual: sheetNew, usedActual: sheetUsed, method: "Daily Log new/used gross rows" };
+    return { newActual: sheetNew, usedActual: sheetUsed, method: "Daily Log New/Used breakdown table" };
   }
 
   const rawDealSum = params.dealNewRaw + params.dealUsedRaw;

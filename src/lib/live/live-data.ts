@@ -91,7 +91,7 @@ function deriveDaysFromRows(rows: string[][], fallbackYear: number, fallbackMont
 }
 
 function deriveSalesTopSummary(rows: string[][]) {
-  const topSummaryScanLimit = 35;
+  const topSummaryScanLimit = 80;
   return {
     totalGross:
       findNumericByLabel(rows, "total new & used gross", { min: 1, maxRowIndex: topSummaryScanLimit }) ??

@@ -33,6 +33,24 @@ describe("Sales parser", () => {
     expect(result.dataQualityIssues.some((i) => i.includes("TBD/NT"))).toBe(true);
   });
 
+  test("parses Daily Log New/Used breakdown table tracking gross", () => {
+    const sheet = [
+      ["", "", "", "Total New & Used Gross", "", "$149,597"],
+      ["", "", "", "Tracking Gross", "", "$233,746"],
+      ["", "", "", "Target Gross", "", "$215,250"],
+      ["", "", "", "", "", "", "", "", "Volume", "Front Average", "Back Average", "Per copy", "Tracking Volume", "Tracking Gross"],
+      ["", "", "", "", "", "", "", "", "New", "22", "$2,069", "$1,463", "$3,532", "34", "$121,420.50"],
+      ["", "", "", "", "", "", "", "", "Used", "22", "$1,377", "$1,891", "$3,268", "34", "$112,325.47"],
+      ["Date", "Customer", "Manager", "Salesperson", "Vehicle", "StockNumber", "DealType", "FrontGross", "BackGross", "TotalGross", "Status"],
+    ];
+
+    const metrics = parseSalesGrossTopMetrics(sheet);
+    expect(metrics.newVehicle.tracking).toBeCloseTo(121_420.5, 0);
+    expect(metrics.usedVehicle.tracking).toBeCloseTo(112_325.47, 0);
+    expect(metrics.newVehicle.actual).not.toBeNull();
+    expect(metrics.usedVehicle.actual).not.toBeNull();
+  });
+
   test("parses sales gross grid for new/used tracking", () => {
     const sheet = [
       ["Sales Daily Log"],

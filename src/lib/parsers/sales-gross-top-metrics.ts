@@ -76,13 +76,9 @@ function scanLabeledNeedleRows(rows: SheetMatrix, maxRowIndex: number): SalesGro
   const metrics = emptySalesGrossTopMetrics();
   const opts = { min: 500, maxRowIndex };
 
-  const newActual = firstNeedleValue(rows, NEW_VEHICLE_ACTUAL_NEEDLES, opts);
-  const usedActual = firstNeedleValue(rows, USED_VEHICLE_ACTUAL_NEEDLES, opts);
   const newTracking = firstNeedleValue(rows, NEW_VEHICLE_TRACKING_NEEDLES, opts);
   const usedTracking = firstNeedleValue(rows, USED_VEHICLE_TRACKING_NEEDLES, opts);
 
-  if (newActual !== null) metrics.newVehicle.actual = newActual;
-  if (usedActual !== null) metrics.usedVehicle.actual = usedActual;
   if (newTracking !== null) metrics.newVehicle.tracking = newTracking;
   if (usedTracking !== null) metrics.usedVehicle.tracking = usedTracking;
 
@@ -247,6 +243,90 @@ function mergeSalesGrossMetrics(primary: SalesGrossTopMetricsMap, secondary: Sal
   return primary;
 }
 
+/** Overlay wins when it has a value (Daily Log breakdown table beats inferred splits). */
+function overlaySalesGrossMetrics(
+  base: SalesGrossTopMetricsMap,
+  overlay: SalesGrossTopMetricsMap,
+): SalesGrossTopMetricsMap {
+  const keys: (keyof SalesGrossTopMetricsMap)[] = ["newVehicle", "usedVehicle", "front", "back", "total"];
+  for (const key of keys) {
+    for (const field of ["actual", "forecast", "tracking"] as const) {
+      if (overlay[key][field] !== null) base[key][field] = overlay[key][field];
+    }
+  }
+  return base;
+}
+
+/**
+ * Daily Log mid-sheet table: row labels "New" / "Used" with a "Tracking Gross" column
+ * (often columns I–O). This is the authoritative per-line tracking source on the sales tab.
+ */
+function scanSalesNewUsedBreakdownTable(rows: SheetMatrix, maxRowIndex: number): SalesGrossTopMetricsMap {
+  const metrics = emptySalesGrossTopMetrics();
+  let trackingGrossCol = -1;
+  let perCopyCol = -1;
+  let volumeCol = -1;
+  let trackingVolumeCol = -1;
+  let headerRow = -1;
+
+  for (let rowIndex = 0; rowIndex < rows.length && rowIndex <= maxRowIndex; rowIndex += 1) {
+    const rawRow = rows[rowIndex];
+    if (!rawRow || isEmptyRow(rawRow)) continue;
+    const row = compactRow(rawRow);
+    const rowLower = row.map((cell) => normalizeCell(cell).toLowerCase());
+    const trackingIdx = rowLower.findIndex((cell) => cell === "tracking gross" || cell.includes("tracking gross"));
+    if (trackingIdx < 0) continue;
+    volumeCol = rowLower.findIndex((cell) => cell === "volume");
+    perCopyCol = rowLower.findIndex((cell) => cell === "per copy" || cell.includes("per copy"));
+    trackingVolumeCol = rowLower.findIndex((cell) => cell.includes("tracking volume"));
+    if (volumeCol < 0 && perCopyCol < 0) continue;
+    trackingGrossCol = trackingIdx;
+    headerRow = rowIndex;
+    break;
+  }
+
+  if (headerRow < 0 || trackingGrossCol < 0) return metrics;
+
+  for (let rowIndex = headerRow + 1; rowIndex <= Math.min(headerRow + 12, maxRowIndex); rowIndex += 1) {
+    const rawRow = rows[rowIndex];
+    if (!rawRow || isEmptyRow(rawRow)) continue;
+    const row = compactRow(rawRow);
+
+    let rowKey: "newVehicle" | "usedVehicle" | null = null;
+    let labelCol = -1;
+    for (let col = 0; col < Math.min(14, row.length); col += 1) {
+      const cell = normalizeCell(row[col]).toLowerCase();
+      if (cell === "new") {
+        rowKey = "newVehicle";
+        labelCol = col;
+      }
+      if (cell === "used") {
+        rowKey = "usedVehicle";
+        labelCol = col;
+      }
+    }
+    if (!rowKey) continue;
+
+    const columnOffset = labelCol >= 0 && labelCol === volumeCol ? 1 : 0;
+
+    const tracking = readAtNullable(row, trackingGrossCol + columnOffset);
+    if (tracking !== null && tracking > 0) metrics[rowKey].tracking = tracking;
+
+    const perCopy = perCopyCol >= 0 ? readAtNullable(row, perCopyCol + columnOffset) : null;
+    const units =
+      trackingVolumeCol >= 0
+        ? readAtNullable(row, trackingVolumeCol + columnOffset)
+        : volumeCol >= 0
+          ? readAtNullable(row, volumeCol + columnOffset)
+          : null;
+    if (units !== null && perCopy !== null && units > 0 && perCopy > 0) {
+      metrics[rowKey].actual = units * perCopy;
+    }
+  }
+
+  return metrics;
+}
+
 function parseSalesGrossWideGrid(rows: SheetMatrix, maxRowIndex: number): SalesGrossTopMetricsMap {
   const metrics = emptySalesGrossTopMetrics();
   let section: "gross" | null = null;
@@ -291,8 +371,10 @@ function parseSalesGrossWideGrid(rows: SheetMatrix, maxRowIndex: number): SalesG
 /** Parse sales gross lines from Daily Log label rows and optional F/C/T grid headers. */
 export function parseSalesGrossTopMetrics(rows: SheetMatrix, options?: { maxRowIndex?: number }): SalesGrossTopMetricsMap {
   const maxRowIndex = options?.maxRowIndex ?? 250;
-  const needleMetrics = scanLabeledNeedleRows(rows, maxRowIndex);
-  const labelMetrics = scanDailyLogLabelRows(rows, maxRowIndex);
-  const wideMetrics = parseSalesGrossWideGrid(rows, maxRowIndex);
-  return mergeSalesGrossMetrics(mergeSalesGrossMetrics(wideMetrics, labelMetrics), needleMetrics);
+  let metrics = emptySalesGrossTopMetrics();
+  metrics = overlaySalesGrossMetrics(metrics, parseSalesGrossWideGrid(rows, maxRowIndex));
+  metrics = overlaySalesGrossMetrics(metrics, scanDailyLogLabelRows(rows, maxRowIndex));
+  metrics = overlaySalesGrossMetrics(metrics, scanLabeledNeedleRows(rows, maxRowIndex));
+  metrics = overlaySalesGrossMetrics(metrics, scanSalesNewUsedBreakdownTable(rows, maxRowIndex));
+  return metrics;
 }
