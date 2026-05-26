@@ -1,3 +1,4 @@
+import type { PerformanceMeetingActionItem } from "@/src/lib/parsers/performance-meeting-action-items-parser";
 import type { SalesDeal } from "@/src/lib/types/dealership";
 import type { MonthlyGrossTracking } from "@/src/lib/velocity/monthly-gross/types";
 
@@ -116,9 +117,51 @@ function dedupeKey(headline: string, action: string) {
   return `${headline.toLowerCase().slice(0, 64)}|${action.toLowerCase().slice(0, 64)}`;
 }
 
+function titleCaseLead(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function headlineFromMeetingText(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.length <= 80) return titleCaseLead(trimmed);
+  const cut = trimmed.slice(0, 80);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${titleCaseLead(lastSpace > 48 ? cut.slice(0, lastSpace) : cut)}…`;
+}
+
+/** Maps performance-meeting sheet rows to Expanded insights key actions. */
+export function keyActionsFromPerformanceMeetingSheet(
+  items: PerformanceMeetingActionItem[],
+  options?: { tabName?: string | null },
+): ExpandedInsightsKeyAction[] {
+  const tabLabel = options?.tabName?.trim() || "performance meeting sheet";
+  let index = 0;
+
+  return items.map((item) => {
+    index += 1;
+    const section = item.department === "Sales" ? "Sales Action Items" : "Service Action Items";
+    const priority: ExpandedInsightsKeyAction["priority"] = index <= 3 ? "high" : index <= 5 ? "medium" : "medium";
+
+    return {
+      id: `perf-meeting-${item.department.toLowerCase()}-${index}`,
+      priority,
+      headline: headlineFromMeetingText(item.text),
+      action: titleCaseLead(item.text),
+      evidence: `${section} · ${tabLabel}`,
+      expectedImpact: "Leadership focus from monthly performance meeting",
+      owner: ownerForDepartment(item.department),
+      dueLabel: "This month",
+      sources: ["Performance meeting"],
+      status: "open",
+    };
+  });
+}
+
 /**
  * Builds prioritized, actionable guidance for the Expanded insights panel.
- * Grounds recommendations in **sales deal Notes** (sheet column) plus gross pacing, forecast gaps, and velocity engine output.
+ * When performance-meeting sheet items are present, those replace auto-generated actions.
  */
 export function buildExpandedInsightsKeyActions(params: {
   reportingMonthKey: string;
@@ -128,7 +171,14 @@ export function buildExpandedInsightsKeyActions(params: {
   primaryThreat: { title: string; department: string; action: string; owner: string } | null;
   totalStoreGap: number | null;
   staleWarnings: string[];
+  performanceMeetingActions?: PerformanceMeetingActionItem[];
+  performanceMeetingTabName?: string | null;
 }): ExpandedInsightsKeyAction[] {
+  if (params.performanceMeetingActions && params.performanceMeetingActions.length > 0) {
+    return keyActionsFromPerformanceMeetingSheet(params.performanceMeetingActions, {
+      tabName: params.performanceMeetingTabName,
+    });
+  }
   const out: ExpandedInsightsKeyAction[] = [];
   const seen = new Set<string>();
   const add = (

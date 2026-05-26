@@ -9,7 +9,13 @@ import {
   validateDepartmentSource,
   type LivePipelineMeta,
 } from "@/src/lib/data-pipeline/source-trace";
-import { fetchSheetRows, isLiveDataEnabled } from "@/src/lib/google/sheets-client";
+import {
+  fetchPerformanceMeetingSheetRows,
+  fetchSheetRows,
+  getPerformanceMeetingSheetId,
+  isLiveDataEnabled,
+} from "@/src/lib/google/sheets-client";
+import { parsePerformanceMeetingActionItems, type PerformanceMeetingActionItem } from "@/src/lib/parsers/performance-meeting-action-items-parser";
 import { parseForecastSheet, type ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import { parsePartsSheetForMonth } from "@/src/lib/parsers/parts-parser";
 import { parseSalesSheetForMonth } from "@/src/lib/parsers/sales-parser";
@@ -126,6 +132,9 @@ export type LiveDataset = {
   forecastTargets: { Sales: number; Service: number; Parts: number };
   /** Parsed forecast-tab rows (metric / actual / forecast) when the forecast sheet is aligned; used for line targets in monthly gross. */
   forecastLineItems: ForecastTrendItem[] | null;
+  /** Sales/Service commitments from the performance meeting workbook (right-hand action item tables). */
+  performanceMeetingActionItems: PerformanceMeetingActionItem[];
+  performanceMeetingTabName: string | null;
   pipeline: LivePipelineMeta;
 };
 
@@ -136,12 +145,18 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
 
   const reportingMonth = resolveReportingMonthKey(options?.reportingMonth ?? null);
   const { year, month } = parseSelectedMonthKey(reportingMonth);
-  const [sales, service, parts, forecast] = await Promise.all([
+  const [sales, service, parts, forecast, performanceMeeting] = await Promise.all([
     fetchSheetRows("sales", "A1:Z1000", { reportingMonth }),
     fetchSheetRows("service", "A1:Z1000", { reportingMonth }),
     fetchSheetRows("parts", "A1:Z1000", { reportingMonth }),
     fetchSheetRows("forecast", "A1:Z1000", { reportingMonth }),
+    fetchPerformanceMeetingSheetRows({ reportingMonth }),
   ]);
+  const performanceMeetingActionItems =
+    performanceMeeting && performanceMeeting.rows.length > 0
+      ? parsePerformanceMeetingActionItems(performanceMeeting.rows)
+      : [];
+  const performanceMeetingTabName = performanceMeeting?.tabName ?? null;
   const salesParsed = parseSalesSheetForMonth(sales.rows, "sales", month, year);
   const salesTopSummary = deriveSalesTopSummary(sales.rows);
   const salesGrossTopMetrics = parseSalesGrossTopMetrics(sales.rows);
@@ -401,6 +416,19 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
   if (forecastExcluded && sources.forecast.required) {
     sourceHealth.staleDataWarnings.push(`Missing ${selectedMonthLabel} Forecast data: tracking disabled for Forecast.`);
   }
+  if (!getPerformanceMeetingSheetId()) {
+    sourceHealth.staleDataWarnings.push(
+      "PERFORMANCE_MEETING_SHEET_ID not set; Expanded insights key actions use auto-generated guidance instead of the performance meeting sheet.",
+    );
+  } else if (performanceMeeting && !performanceMeeting.tabName) {
+    sourceHealth.staleDataWarnings.push(
+      `Performance meeting sheet: no tab matched for ${selectedMonthLabel} (${performanceMeeting.resolutionNote}).`,
+    );
+  } else if (performanceMeeting?.tabName && performanceMeetingActionItems.length === 0) {
+    sourceHealth.staleDataWarnings.push(
+      `Performance meeting sheet (${performanceMeeting.tabName}): no Sales/Service action items parsed.`,
+    );
+  }
 
   const totalUnits = effectiveSalesRows.length;
   const newUnits = effectiveSalesRows.filter((d) => d.dealType === "new").length;
@@ -487,6 +515,8 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     })(),
     forecastTargets,
     forecastLineItems,
+    performanceMeetingActionItems,
+    performanceMeetingTabName,
     pipeline,
   };
 }

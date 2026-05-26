@@ -30,3 +30,6 @@ export const sources: Record<
   },
 };
 
+/** Optional: `PERFORMANCE_MEETING_SHEET_ID` — expanded insights key actions from Sales/Service action item tables. */
+export const performanceMeetingSheetIdEnv = "PERFORMANCE_MEETING_SHEET_ID";
+

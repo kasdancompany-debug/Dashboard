@@ -6,6 +6,7 @@ import {
   resolveForecastQuarterTab,
   resolveMonthTab,
 } from "@/src/lib/google/month-tab-resolver";
+import { resolvePerformanceMeetingMonthTab } from "@/src/lib/google/performance-meeting-tab-resolver";
 import { sources } from "@/src/lib/velocity/source-config";
 
 export type SheetKind = "sales" | "service" | "parts" | "forecast";
@@ -90,6 +91,11 @@ function mapGoogleError(error: unknown, sheetId: string) {
 
 export function isLiveDataEnabled() {
   return (process.env.LIVE_DATA_ENABLED ?? "false").toLowerCase() === "true";
+}
+
+export function getPerformanceMeetingSheetId() {
+  const value = process.env.PERFORMANCE_MEETING_SHEET_ID?.trim();
+  return value || null;
 }
 
 function quoteTabName(tabName: string) {
@@ -231,6 +237,78 @@ export async function fetchSheetRows(
       range: resolvedRange,
       tabName: parseTabFromA1Range(resolvedRange),
       resolutionNote,
+      rows: valuesResponse.data.values ?? [],
+      lastSynced: new Date().toISOString(),
+    };
+  } catch (error) {
+    throw mapGoogleError(error, sheetId);
+  }
+}
+
+export type PerformanceMeetingFetchedRows = {
+  source: "google-sheets";
+  kind: "performance-meeting";
+  sheetId: string;
+  workbookTitle: string | null;
+  availableTabNames: string[];
+  attemptedTabNames: string[];
+  range: string;
+  tabName: string | null;
+  resolutionNote: string;
+  rows: string[][];
+  lastSynced: string;
+};
+
+/** Optional workbook: Sault Nissan Performance meeting (Sales/Service action items on the right). */
+export async function fetchPerformanceMeetingSheetRows(options?: {
+  reportingMonth?: string | null;
+}): Promise<PerformanceMeetingFetchedRows | null> {
+  const sheetId = getPerformanceMeetingSheetId();
+  if (!sheetId) return null;
+
+  const sheets = createSheetsClient();
+  const now = new Date();
+  const reportingMonth =
+    options?.reportingMonth ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  try {
+    const [workbookTitle, availableTabNames] = await Promise.all([
+      fetchSpreadsheetTitle(sheets, sheetId),
+      fetchAvailableTabNames(sheets, sheetId),
+    ]);
+    const resolution = resolvePerformanceMeetingMonthTab(reportingMonth, availableTabNames);
+    if (!resolution.matched || !resolution.matchedTab) {
+      return {
+        source: "google-sheets",
+        kind: "performance-meeting",
+        sheetId,
+        workbookTitle,
+        availableTabNames,
+        attemptedTabNames: resolution.attemptedTabNames,
+        range: "(month tab not resolved)",
+        tabName: null,
+        resolutionNote: `Could not find ${monthLabelFromKey(reportingMonth)} performance meeting tab.`,
+        rows: [],
+        lastSynced: new Date().toISOString(),
+      };
+    }
+
+    const resolvedRange = `${quoteTabName(resolution.matchedTab)}!A1:Z2000`;
+    const valuesResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: resolvedRange,
+    });
+
+    return {
+      source: "google-sheets",
+      kind: "performance-meeting",
+      sheetId,
+      workbookTitle,
+      availableTabNames,
+      attemptedTabNames: resolution.attemptedTabNames,
+      range: resolvedRange,
+      tabName: parseTabFromA1Range(resolvedRange),
+      resolutionNote: `Resolved performance meeting tab for ${reportingMonth}.`,
       rows: valuesResponse.data.values ?? [],
       lastSynced: new Date().toISOString(),
     };

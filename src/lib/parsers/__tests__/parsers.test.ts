@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
 
+import { resolvePerformanceMeetingMonthTab } from "@/src/lib/google/performance-meeting-tab-resolver";
+import { keyActionsFromPerformanceMeetingSheet } from "@/src/lib/dashboard/expanded-insights-key-actions";
 import { parseForecastSheet } from "../forecast-parser";
 import { parsePartsSheet } from "../parts-parser";
+import { parsePerformanceMeetingActionItems } from "../performance-meeting-action-items-parser";
 import { parseSalesSheet } from "../sales-parser";
 import { parseSalesGrossTopMetrics } from "../sales-gross-top-metrics";
 import { parseServiceSheet } from "../service-parser";
@@ -171,5 +174,47 @@ describe("Parts parser", () => {
     expect(result.data.categoryBreakdown[0].category).toBe("Accessories");
     expect(result.data.categoryBreakdown[0].sales).toBe(44000);
     expect(result.data.categoryBreakdown[0].gross).toBe(44000);
+  });
+});
+
+describe("Performance meeting action items", () => {
+  test("parses Sales and Service action item blocks", () => {
+    const sheet = Array.from({ length: 35 }, () => Array.from({ length: 22 }, () => ""));
+    sheet[5][17] = "Sales Action Items";
+    sheet[7][17] = "new car back end profitability meet with fni team";
+    sheet[8][17] = "used car back end profitability meet with fni team";
+    sheet[9][17] = "hold trade gross (acv)";
+    sheet[20][17] = "Service Action Items";
+    sheet[22][17] = "focus on keeping hrs per ro up 1.5 goal";
+    sheet[23][17] = "implementation of digital dispatch to ensure flow on";
+    sheet[24][17] = "mvi inspection process methodical inspection indu";
+
+    const items = parsePerformanceMeetingActionItems(sheet);
+    expect(items).toHaveLength(6);
+    expect(items[0]).toEqual({
+      department: "Sales",
+      text: "new car back end profitability meet with fni team",
+    });
+    expect(items[3]).toEqual({
+      department: "Service",
+      text: "focus on keeping hrs per ro up 1.5 goal",
+    });
+  });
+
+  test("maps sheet items to expanded insights key actions", () => {
+    const actions = keyActionsFromPerformanceMeetingSheet(
+      [{ department: "Sales", text: "hold trade gross (acv)" }],
+      { tabName: "May 2026 Sault" },
+    );
+    expect(actions).toHaveLength(1);
+    expect(actions[0].action).toBe("Hold trade gross (acv)");
+    expect(actions[0].sources).toEqual(["Performance meeting"]);
+    expect(actions[0].evidence).toContain("May 2026 Sault");
+  });
+
+  test("resolves performance meeting month tabs with Sault suffix", () => {
+    const tabs = ["Master Sault", "May 2026 Sault", "12 May 2026 Sault", "April 2026 Sault"];
+    const resolution = resolvePerformanceMeetingMonthTab("2026-05", tabs);
+    expect(resolution.matchedTab).toBe("12 May 2026 Sault");
   });
 });

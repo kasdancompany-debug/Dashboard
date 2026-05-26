@@ -283,6 +283,8 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     reportingMonthKey: normalized.pipeline.reportingMonth,
     salesDeals: normalized.salesDeals,
     monthly: monthlyGrossTracking,
+    performanceMeetingActions: normalized.performanceMeetingActionItems,
+    performanceMeetingTabName: normalized.performanceMeetingTabName,
     actionQueue: actionQueue.map((row) => ({
       id: row.id,
       rank: row.rank,
