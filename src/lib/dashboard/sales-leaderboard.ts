@@ -25,7 +25,8 @@ function isUsableName(name: string) {
 
 /**
  * Aggregates Daily Log deals by Salesperson column for the expanded insights leaderboard.
- * Ranked by total gross (then units). Merges Ron/RON casing variants.
+ * Counts every real deal row on the selected month tab (any Status), matching the sheet.
+ * Ranked by units, then total gross. Merges Ron/RON casing variants.
  */
 export function buildSalesLeaderboard(deals: SalesDeal[], limit = 12): SalesLeaderboardRow[] {
   const grouped = new Map<

@@ -600,7 +600,8 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
         Sales leaderboard
       </p>
       <p className="mb-4 text-[13px] text-slate-400">
-        Exact closed deals on the selected Daily Log month tab (Salesperson column).{" "}
+        Exact Salesperson column on this month&apos;s Daily Log tab — every deal row, including
+        carryovers / lost / rollover if they appear on the sheet.{" "}
         <span className="font-medium text-slate-300">
           {rows.length} salesperson{rows.length === 1 ? "" : "s"} · {totalUnits} unit{totalUnits === 1 ? "" : "s"}
         </span>

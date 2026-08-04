@@ -95,12 +95,13 @@ describe("Sales parser gross columns", () => {
     ];
 
     const month = parseSalesSheetForMonth(sheet, "sales", 7, 2026);
-    expect(month.rows).toHaveLength(2);
-    expect(month.rows.map((d) => d.salesperson).sort()).toEqual(["JAN", "Ron"]);
+    expect(month.rows).toHaveLength(4);
+    expect(month.closedRows).toHaveLength(2);
+    expect(month.closedRows.map((d) => d.salesperson).sort()).toEqual(["JAN", "Ron"]);
     expect(month.summaries.totalUnits).toBe(2);
   });
 
-  test("counts carryover rows on the month tab even when Date is another month", () => {
+  test("counts every Salesperson row on the month tab including carryovers and lost", () => {
     const header = [
       "",
       "Date",
@@ -126,13 +127,16 @@ describe("Sales parser gross columns", () => {
     ];
     const sheet = [
       header,
-      ["", "May 31", "Carryover", "M", "Ron", "Rogue", "S1", "3", "", "", "", "BM", "72", "$100", "$200", "$300", "", "", "", "", "POSTED"],
+      ["", "May 31", "Carryover", "M", "Ron", "Rogue", "S1", "3", "", "", "", "BM", "72", "$0", "$0", "$0", "", "", "", "", ""],
       ["", "Jul 2", "JulyDeal", "M", "MADDY", "Sentra", "S2", "4", "", "", "", "BM", "72", "$10", "$20", "$30", "", "", "", "", "POSTED"],
+      ["", "Jul 3", "LostDeal", "M", "JAN", "Kicks", "S3", "4", "", "", "", "BM", "72", "$0", "$0", "$0", "", "", "", "", "LOST"],
     ];
 
     const month = parseSalesSheetForMonth(sheet, "sales", 7, 2026);
-    expect(month.rows).toHaveLength(2);
-    expect(month.rows.map((d) => d.salesperson).sort()).toEqual(["MADDY", "Ron"]);
+    expect(month.rows).toHaveLength(3);
+    expect(month.rows.map((d) => d.salesperson).sort()).toEqual(["JAN", "MADDY", "Ron"]);
+    expect(month.closedRows).toHaveLength(2); // blank status + POSTED count as delivered; LOST excluded from closed
+    expect(month.summaries.totalUnits).toBe(2);
   });
 });
 

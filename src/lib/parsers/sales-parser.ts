@@ -154,24 +154,24 @@ export function parseSalesSheetForMonth(
   year: number,
 ) {
   // Rows are already loaded from the resolved month tab (e.g. JULY 2026).
-  // Trust the tab as source of truth — do not re-filter by Date (carryovers stay on the month they were logged).
+  // Trust the tab as source of truth — every real deal row on the tab counts for the leaderboard.
   const base = parseSalesSheet(rows, sourceSheet);
   const tabRows = base.data;
-  const deliveredRows = tabRows.filter((deal) => deal.status === "delivered");
+  const closedRows = tabRows.filter((deal) => deal.status === "delivered");
   const warnings = [...base.dataQualityIssues];
   if (!tabRows.length) {
     warnings.push(`No sales rows found on selected month tab ${year}-${String(month).padStart(2, "0")}.`);
   }
-  if (tabRows.length && !deliveredRows.length) {
+  if (tabRows.length && !closedRows.length) {
     warnings.push(`No closed (posted/sold/delivered) sales deals found on selected month tab ${year}-${String(month).padStart(2, "0")}.`);
   }
-  const frontGross = deliveredRows.reduce((sum, d) => sum + d.frontGross, 0);
-  const backGross = deliveredRows.reduce((sum, d) => sum + d.backGross, 0);
-  const totalGross = deliveredRows.reduce((sum, d) => sum + d.totalGross, 0);
-  const units = deliveredRows.length;
+  const frontGross = closedRows.reduce((sum, d) => sum + d.frontGross, 0);
+  const backGross = closedRows.reduce((sum, d) => sum + d.backGross, 0);
+  const totalGross = closedRows.reduce((sum, d) => sum + d.totalGross, 0);
+  const units = closedRows.length;
   const lines = [
-    { label: "New Vehicle Gross", value: deliveredRows.filter((d) => d.dealType === "new").reduce((s, d) => s + d.totalGross, 0) },
-    { label: "Used Vehicle Gross", value: deliveredRows.filter((d) => d.dealType === "used").reduce((s, d) => s + d.totalGross, 0) },
+    { label: "New Vehicle Gross", value: closedRows.filter((d) => d.dealType === "new").reduce((s, d) => s + d.totalGross, 0) },
+    { label: "Used Vehicle Gross", value: closedRows.filter((d) => d.dealType === "used").reduce((s, d) => s + d.totalGross, 0) },
     { label: "Front Gross", value: frontGross },
     { label: "Back Gross", value: backGross },
     { label: "Total Gross", value: totalGross },
@@ -181,7 +181,10 @@ export function parseSalesSheetForMonth(
   return {
     month,
     year,
-    rows: deliveredRows,
+    /** Every real deal row on the month tab (any Status) — use for salesperson leaderboard. */
+    rows: tabRows,
+    /** Posted/sold/delivered only — use for gross KPIs. */
+    closedRows,
     summaries: {
       totalUnits: units,
       totalGross,

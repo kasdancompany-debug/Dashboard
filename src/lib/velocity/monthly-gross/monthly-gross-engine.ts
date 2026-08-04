@@ -525,6 +525,7 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     (safe(input.sales.summary?.targetGross) || safe(input.targets?.Sales));
 
   // Deals are already scoped to the selected Daily Log month tab in live data.
+  // Gross lines use closed deals only; salesperson leaderboard uses all tab rows separately.
   const monthlySalesDeals = input.sales.data.filter((deal) => deal.status === "delivered");
 
   const salesGrossMetrics = input.sales.summary?.grossLineMetrics;

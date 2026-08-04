@@ -369,6 +369,7 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     },
   };
   const effectiveSalesRows = salesExcluded ? [] : salesParsed.rows;
+  const effectiveClosedSalesRows = salesExcluded ? [] : (salesParsed.closedRows ?? salesParsed.rows.filter((d) => d.status === "delivered"));
   const effectiveServiceSummary = serviceExcluded
     ? { ...serviceParsed.summaries, gross: { customer: 0, warranty: 0, internal: 0, total: 0 }, actual: 0 }
     : serviceParsed.summaries;
@@ -430,12 +431,12 @@ export async function getLiveDataset(options?: { reportingMonth?: string | null 
     );
   }
 
-  const totalUnits = effectiveSalesRows.length;
-  const newUnits = effectiveSalesRows.filter((d) => d.dealType === "new").length;
-  const usedUnits = effectiveSalesRows.filter((d) => d.dealType === "used").length;
-  const frontGross = effectiveSalesRows.reduce((acc, d) => acc + safeNumber(d.frontGross), 0);
-  const backGross = effectiveSalesRows.reduce((acc, d) => acc + safeNumber(d.backGross), 0);
-  const totalSalesGrossFromDeals = effectiveSalesRows.reduce((acc, d) => acc + safeNumber(d.totalGross), 0);
+  const totalUnits = effectiveClosedSalesRows.length;
+  const newUnits = effectiveClosedSalesRows.filter((d) => d.dealType === "new").length;
+  const usedUnits = effectiveClosedSalesRows.filter((d) => d.dealType === "used").length;
+  const frontGross = effectiveClosedSalesRows.reduce((acc, d) => acc + safeNumber(d.frontGross), 0);
+  const backGross = effectiveClosedSalesRows.reduce((acc, d) => acc + safeNumber(d.backGross), 0);
+  const totalSalesGrossFromDeals = effectiveClosedSalesRows.reduce((acc, d) => acc + safeNumber(d.totalGross), 0);
   const totalSalesGross = salesTopSummary.totalGross ?? totalSalesGrossFromDeals;
   const salesTrackingGross = salesTopSummary.trackingGross ?? totalSalesGross;
 
