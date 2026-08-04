@@ -95,16 +95,21 @@ export function parseSalesSheet(rows: SheetMatrix, sourceSheet: string) {
 
     const statusRaw = cleanCell(cells.get("status") ?? row[20] ?? row[15]);
     const notes = cleanCell(cells.get("notes") ?? row[18] ?? row[16]);
-    const statusText = `${statusRaw} ${notes}`.toLowerCase();
-    const status = statusText.includes("incoming")
-      ? "incoming"
-      : statusText.includes("preorder")
-        ? "preorder"
-        : statusText.includes("issue")
-          ? "issue"
-          : statusText.includes("pending")
-            ? "pending"
-            : "delivered";
+    // Classify from Status column only — Notes often contain words like "pending" that are not deal status.
+    const statusOnly = statusRaw.toLowerCase();
+    const status: SalesDeal["status"] = /\blost\b|\bunwind\b|\bdead\b|\bcancel/.test(statusOnly)
+      ? "issue"
+      : /\brollover\b/.test(statusOnly)
+        ? "pending"
+        : /\bincoming\b/.test(statusOnly)
+          ? "incoming"
+          : /\bpreorder\b/.test(statusOnly)
+            ? "preorder"
+            : /\bpending\b/.test(statusOnly)
+              ? "pending"
+              : /\bissue\b/.test(statusOnly)
+                ? "issue"
+                : "delivered";
 
     if (!manager || !salesperson || !vehicle) {
       issues.push(`Row ${i + 1}: missing manager/salesperson/vehicle.`);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { parseSalesSheet } from "../sales-parser";
+import { parseSalesSheet, parseSalesSheetForMonth } from "../sales-parser";
 
 describe("Sales parser gross columns", () => {
   test("reads Front Gross / Back Gross / Total Gross headers with spaces", () => {
@@ -60,5 +60,43 @@ describe("Sales parser gross columns", () => {
     expect(result.data[0].backGross).toBeCloseTo(3638.25, 2);
     expect(result.data[0].totalGross).toBeCloseTo(4214.37, 2);
     expect(result.data[0].estimatedTerm).toBe(72);
+  });
+
+  test("excludes lost and rollover from delivered month rows", () => {
+    const header = [
+      "",
+      "Date",
+      "Customer",
+      "Manager",
+      "Salesperson",
+      "Vehicle",
+      "Stock #",
+      "1 2 3 4",
+      "Trade",
+      "ACV",
+      "Trade Retail",
+      "Business Manager",
+      "Est. Term",
+      "Front Gross",
+      "Back Gross",
+      "Total Gross",
+      "LAG",
+      "Source",
+      "Notes",
+      "Finance Status",
+      "Status",
+    ];
+    const sheet = [
+      header,
+      ["", "Jul 2", "A", "M", "Ron", "Rogue", "S1", "3", "", "", "", "BM", "72", "$100", "$200", "$300", "", "", "", "", "POSTED"],
+      ["", "Jul 3", "B", "M", "MADDY", "Sentra", "S2", "4", "", "", "", "BM", "72", "$0", "$0", "$0", "", "", "", "", "LOST"],
+      ["", "Jul 4", "C", "M", "MARINA", "Kicks", "S3", "4", "", "", "", "BM", "72", "$50", "$50", "$100", "", "", "", "", "rollover"],
+      ["", "Jul 5", "D", "M", "JAN", "Pathfinder", "S4", "3", "", "", "", "BM", "72", "$10", "$20", "$30", "", "", "", "", "sold"],
+    ];
+
+    const month = parseSalesSheetForMonth(sheet, "sales", 7, 2026);
+    expect(month.rows).toHaveLength(2);
+    expect(month.rows.map((d) => d.salesperson).sort()).toEqual(["JAN", "Ron"]);
+    expect(month.summaries.totalUnits).toBe(2);
   });
 });
