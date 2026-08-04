@@ -7,7 +7,10 @@
 import { useState } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
   CheckCircle2,
   CircleDollarSign,
   CircleAlert,
@@ -576,6 +579,12 @@ function KeyActionsDigest({ items }: { items: VelocityData["keyActions"] }) {
 }
 
 function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
+  type SortKey = "name" | "units" | "totalGross" | "perCopy" | "frontGross" | "backGross" | "newUsed";
+  type SortDir = "desc" | "asc";
+
+  const [sortKey, setSortKey] = useState<SortKey>("units");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
   if (!rows.length) {
     return (
       <ExecSection>
@@ -590,8 +599,72 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
     );
   }
 
-  const leader = rows[0];
   const totalUnits = rows.reduce((sum, row) => sum + row.units, 0);
+
+  const sorted = [...rows].sort((a, b) => {
+    if (sortKey === "name") {
+      const cmp = a.name.localeCompare(b.name);
+      return sortDir === "asc" ? cmp : -cmp;
+    }
+    if (sortKey === "newUsed") {
+      const aMix = a.newUnits + a.usedUnits * 0.001;
+      const bMix = b.newUnits + b.usedUnits * 0.001;
+      const cmp = aMix - bMix || a.newUnits - b.newUnits || a.name.localeCompare(b.name);
+      return sortDir === "asc" ? cmp : -cmp;
+    }
+    const av = a[sortKey];
+    const bv = b[sortKey];
+    const cmp = av < bv ? -1 : av > bv ? 1 : a.name.localeCompare(b.name);
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const leader = [...rows].sort((a, b) => b.units - a.units || b.totalGross - a.totalGross)[0];
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir("desc");
+  }
+
+  function SortHeader({
+    label,
+    column,
+    align = "left",
+  }: {
+    label: string;
+    column: SortKey;
+    align?: "left" | "right";
+  }) {
+    const active = sortKey === column;
+    return (
+      <th className={cn("px-3 py-2.5", align === "right" && "text-right")}>
+        <button
+          type="button"
+          onClick={() => toggleSort(column)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-white/10 hover:text-slate-200",
+            align === "right" && "ml-auto flex-row-reverse",
+            active ? "text-emerald-300" : "text-slate-500",
+          )}
+          aria-label={`Sort by ${label} ${active && sortDir === "asc" ? "descending" : "ascending"}`}
+        >
+          <span>{label}</span>
+          {active ? (
+            sortDir === "desc" ? (
+              <ArrowDown className="h-3 w-3 shrink-0" aria-hidden />
+            ) : (
+              <ArrowUp className="h-3 w-3 shrink-0" aria-hidden />
+            )
+          ) : (
+            <ArrowUpDown className="h-3 w-3 shrink-0 opacity-50" aria-hidden />
+          )}
+        </button>
+      </th>
+    );
+  }
 
   return (
     <ExecSection>
@@ -605,7 +678,7 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
         <span className="font-medium text-slate-300">
           {rows.length} salesperson{rows.length === 1 ? "" : "s"} · {totalUnits} unit{totalUnits === 1 ? "" : "s"}
         </span>
-        . Ranked by units, then gross.
+        . Click a column to sort (high → low, click again for low → high).
         {leader ? (
           <>
             {" "}
@@ -618,29 +691,29 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
       <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/20">
         <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
           <thead>
-            <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-              <th className="px-3 py-2.5">#</th>
-              <th className="px-3 py-2.5">Salesperson</th>
-              <th className="px-3 py-2.5 text-right">Units</th>
-              <th className="px-3 py-2.5 text-right">Total Gross</th>
-              <th className="px-3 py-2.5 text-right">Per Copy</th>
-              <th className="px-3 py-2.5 text-right">Front</th>
-              <th className="px-3 py-2.5 text-right">Back</th>
-              <th className="px-3 py-2.5 text-right">New / Used</th>
+            <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-[0.12em]">
+              <th className="px-3 py-2.5 text-slate-500">#</th>
+              <SortHeader label="Salesperson" column="name" />
+              <SortHeader label="Units" column="units" align="right" />
+              <SortHeader label="Total Gross" column="totalGross" align="right" />
+              <SortHeader label="Per Copy" column="perCopy" align="right" />
+              <SortHeader label="Front" column="frontGross" align="right" />
+              <SortHeader label="Back" column="backGross" align="right" />
+              <SortHeader label="New / Used" column="newUsed" align="right" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const isLeader = row.rank === 1;
+            {sorted.map((row, index) => {
+              const isLeader = row.name === leader?.name;
               return (
                 <tr
-                  key={`${row.rank}-${row.name}`}
+                  key={row.name}
                   className={cn(
                     "border-t border-white/[0.06]",
                     isLeader ? "bg-emerald-500/10" : "hover:bg-white/[0.03]",
                   )}
                 >
-                  <td className="px-3 py-2.5 font-mono text-slate-400">{row.rank}</td>
+                  <td className="px-3 py-2.5 font-mono text-slate-400">{index + 1}</td>
                   <td className={cn("px-3 py-2.5 font-semibold", isLeader ? "text-emerald-100" : "text-white")}>
                     {row.name}
                   </td>
