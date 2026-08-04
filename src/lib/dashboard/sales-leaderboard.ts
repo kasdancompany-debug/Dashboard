@@ -19,17 +19,27 @@ function normalizeName(value: string) {
 function isUsableName(name: string) {
   if (!name) return false;
   if (/^(tbd|nt|n\/a|na|unknown|-)$/i.test(name)) return false;
+  if (/target\s*gross|salesperson|total/i.test(name)) return false;
   return true;
 }
 
 /**
  * Aggregates Daily Log deals by Salesperson column for the expanded insights leaderboard.
- * Ranked by total gross (then units).
+ * Ranked by total gross (then units). Merges Ron/RON casing variants.
  */
 export function buildSalesLeaderboard(deals: SalesDeal[], limit = 12): SalesLeaderboardRow[] {
   const grouped = new Map<
     string,
-    { name: string; units: number; totalGross: number; frontGross: number; backGross: number; newUnits: number; usedUnits: number }
+    {
+      name: string;
+      nameCounts: Map<string, number>;
+      units: number;
+      totalGross: number;
+      frontGross: number;
+      backGross: number;
+      newUnits: number;
+      usedUnits: number;
+    }
   >();
 
   for (const deal of deals) {
@@ -39,6 +49,7 @@ export function buildSalesLeaderboard(deals: SalesDeal[], limit = 12): SalesLead
     const key = name.toLowerCase();
     const current = grouped.get(key) ?? {
       name,
+      nameCounts: new Map<string, number>(),
       units: 0,
       totalGross: 0,
       frontGross: 0,
@@ -46,6 +57,7 @@ export function buildSalesLeaderboard(deals: SalesDeal[], limit = 12): SalesLead
       newUnits: 0,
       usedUnits: 0,
     };
+    current.nameCounts.set(name, (current.nameCounts.get(name) ?? 0) + 1);
     current.units += 1;
     current.totalGross += Number.isFinite(deal.totalGross) ? deal.totalGross : 0;
     current.frontGross += Number.isFinite(deal.frontGross) ? deal.frontGross : 0;
@@ -53,6 +65,18 @@ export function buildSalesLeaderboard(deals: SalesDeal[], limit = 12): SalesLead
     if (deal.dealType === "new") current.newUnits += 1;
     if (deal.dealType === "used") current.usedUnits += 1;
     grouped.set(key, current);
+  }
+
+  for (const row of grouped.values()) {
+    let bestName = row.name;
+    let bestCount = -1;
+    for (const [variant, count] of row.nameCounts) {
+      if (count > bestCount || (count === bestCount && variant.length < bestName.length)) {
+        bestName = variant;
+        bestCount = count;
+      }
+    }
+    row.name = bestName;
   }
 
   return Array.from(grouped.values())

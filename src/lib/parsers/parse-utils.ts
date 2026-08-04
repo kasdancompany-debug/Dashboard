@@ -110,7 +110,12 @@ export function findHeaderRow(rows: SheetMatrix, requiredKeywords: string[]): nu
 export function rowObjectFromHeader(header: string[], row: string[]) {
   const map = new Map<string, string>();
   header.forEach((h, idx) => {
-    map.set(normalizeCell(h), cleanCell(row[idx] ?? ""));
+    const value = cleanCell(row[idx] ?? "");
+    const normalized = normalizeCell(h);
+    if (!normalized) return;
+    map.set(normalized, value);
+    // Also index "Front Gross" as "frontgross" so lookups without spaces still hit.
+    map.set(normalized.replace(/[^a-z0-9]+/g, ""), value);
   });
   return map;
 }
