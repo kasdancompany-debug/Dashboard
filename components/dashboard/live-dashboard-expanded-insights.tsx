@@ -591,6 +591,7 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
   }
 
   const leader = rows[0];
+  const totalUnits = rows.reduce((sum, row) => sum + row.units, 0);
 
   return (
     <ExecSection>
@@ -599,12 +600,16 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
         Sales leaderboard
       </p>
       <p className="mb-4 text-[13px] text-slate-400">
-        Ranked by total gross from the selected Daily Log month tab (Salesperson column).
-        Carryover rows on that tab are included so this matches the sheet the team uses.
+        Exact closed deals on the selected Daily Log month tab (Salesperson column).{" "}
+        <span className="font-medium text-slate-300">
+          {rows.length} salesperson{rows.length === 1 ? "" : "s"} · {totalUnits} unit{totalUnits === 1 ? "" : "s"}
+        </span>
+        . Ranked by units, then gross.
         {leader ? (
           <>
             {" "}
-            Leader: <span className="font-semibold text-emerald-300">{leader.name}</span> at {money(leader.totalGross)}.
+            Leader: <span className="font-semibold text-emerald-300">{leader.name}</span> ({leader.units} unit
+            {leader.units === 1 ? "" : "s"}, {money(leader.totalGross)}).
           </>
         ) : null}
       </p>

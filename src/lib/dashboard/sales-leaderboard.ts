@@ -80,7 +80,7 @@ export function buildSalesLeaderboard(deals: SalesDeal[], limit = 12): SalesLead
   }
 
   return Array.from(grouped.values())
-    .sort((a, b) => b.totalGross - a.totalGross || b.units - a.units || a.name.localeCompare(b.name))
+    .sort((a, b) => b.units - a.units || b.totalGross - a.totalGross || a.name.localeCompare(b.name))
     .slice(0, Math.max(1, limit))
     .map((row, index) => ({
       rank: index + 1,

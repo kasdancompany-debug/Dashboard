@@ -36,15 +36,15 @@ describe("buildSalesLeaderboard", () => {
     ]);
 
     expect(rows).toHaveLength(2);
-    expect(rows[0].name).toBe("D. Khan");
+    expect(rows[0].name).toBe("A. Patel");
     expect(rows[0].rank).toBe(1);
-    expect(rows[0].units).toBe(1);
-    expect(rows[0].totalGross).toBe(8000);
-    expect(rows[1].name).toBe("A. Patel");
-    expect(rows[1].units).toBe(2);
-    expect(rows[1].totalGross).toBe(7000);
-    expect(rows[1].newUnits).toBe(1);
-    expect(rows[1].usedUnits).toBe(1);
-    expect(rows[1].perCopy).toBe(3500);
+    expect(rows[0].units).toBe(2);
+    expect(rows[0].totalGross).toBe(7000);
+    expect(rows[0].newUnits).toBe(1);
+    expect(rows[0].usedUnits).toBe(1);
+    expect(rows[0].perCopy).toBe(3500);
+    expect(rows[1].name).toBe("D. Khan");
+    expect(rows[1].units).toBe(1);
+    expect(rows[1].totalGross).toBe(8000);
   });
 });
