@@ -1,4 +1,5 @@
 import type { PerformanceMeetingActionItem } from "@/src/lib/parsers/performance-meeting-action-items-parser";
+import { calendarPartsFromDateKey } from "@/src/lib/parsers/parse-utils";
 import type { SalesDeal } from "@/src/lib/types/dealership";
 import type { MonthlyGrossTracking } from "@/src/lib/velocity/monthly-gross/types";
 
@@ -104,8 +105,8 @@ function dealsForMonth(deals: SalesDeal[], reportingMonthKey: string): SalesDeal
   if (!parsed) return deals;
   const { year, month } = parsed;
   return deals.filter((d) => {
-    const dt = new Date(d.date);
-    return Number.isFinite(dt.getTime()) && dt.getFullYear() === year && dt.getMonth() + 1 === month;
+    const parts = calendarPartsFromDateKey(d.date);
+    return Boolean(parts && parts.year === year && parts.month === month);
   });
 }
 

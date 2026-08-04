@@ -124,6 +124,17 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
+/** Parse `YYYY-MM-DD` without UTC timezone shifting the calendar day. */
+export function calendarPartsFromDateKey(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? "").trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
+}
+
 export function partitionFormulaDiagnostics(issues: string[]): { formulaErrors: string[]; otherIssues: string[] } {
   const formulaErrors = issues.filter((i) => i.startsWith("Formula error"));
   const otherIssues = issues.filter((i) => !i.startsWith("Formula error"));

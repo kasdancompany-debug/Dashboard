@@ -3,6 +3,7 @@ import type { ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import type { SourceHealth } from "@/src/lib/velocity/engine/types";
 import { resolveDepartmentForecastTotal, resolveForecastTargetForLine } from "@/src/lib/velocity/monthly-gross/forecast-line-targets";
 import type { DeptGrossSubLineMetrics, DeptGrossSubLineMetricsMap } from "@/src/lib/parsers/dept-summary-metrics";
+import { calendarPartsFromDateKey } from "@/src/lib/parsers/parse-utils";
 import type { SalesGrossSubLineMetrics, SalesGrossTopMetricsMap } from "@/src/lib/parsers/sales-gross-top-metrics";
 import type {
   BestWorstTrackingLine,
@@ -525,8 +526,8 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     (safe(input.sales.summary?.targetGross) || safe(input.targets?.Sales));
 
   const monthlySalesDeals = input.sales.data.filter((deal) => {
-    const d = new Date(deal.date);
-    return d.getFullYear() === year && d.getMonth() + 1 === month && deal.status === "delivered";
+    const parts = calendarPartsFromDateKey(deal.date);
+    return Boolean(parts && parts.year === year && parts.month === month && deal.status === "delivered");
   });
 
   const salesGrossMetrics = input.sales.summary?.grossLineMetrics;

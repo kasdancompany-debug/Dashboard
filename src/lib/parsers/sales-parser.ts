@@ -8,6 +8,7 @@ import {
   hasAnyKeyword,
   isEmptyRow,
   nowIso,
+  calendarPartsFromDateKey,
   parseCurrency,
   parseDateLike,
   parseNumber,
@@ -150,8 +151,8 @@ export function parseSalesSheetForMonth(
 ) {
   const base = parseSalesSheet(rows, sourceSheet);
   const monthRows = base.data.filter((deal) => {
-    const d = new Date(deal.date);
-    return d.getFullYear() === year && d.getMonth() + 1 === month;
+    const parts = calendarPartsFromDateKey(deal.date);
+    return Boolean(parts && parts.year === year && parts.month === month);
   });
   const deliveredRows = monthRows.filter((deal) => deal.status === "delivered");
   const warnings = [...base.dataQualityIssues];
