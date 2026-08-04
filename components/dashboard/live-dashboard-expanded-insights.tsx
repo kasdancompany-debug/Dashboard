@@ -599,7 +599,8 @@ function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
         Sales leaderboard
       </p>
       <p className="mb-4 text-[13px] text-slate-400">
-        Ranked by total gross from the Daily Log <span className="font-medium text-slate-300">Salesperson</span> column.
+        Ranked by total gross from the selected Daily Log month tab (Salesperson column).
+        Carryover rows on that tab are included so this matches the sheet the team uses.
         {leader ? (
           <>
             {" "}

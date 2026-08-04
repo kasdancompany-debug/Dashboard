@@ -99,4 +99,40 @@ describe("Sales parser gross columns", () => {
     expect(month.rows.map((d) => d.salesperson).sort()).toEqual(["JAN", "Ron"]);
     expect(month.summaries.totalUnits).toBe(2);
   });
+
+  test("counts carryover rows on the month tab even when Date is another month", () => {
+    const header = [
+      "",
+      "Date",
+      "Customer",
+      "Manager",
+      "Salesperson",
+      "Vehicle",
+      "Stock #",
+      "1 2 3 4",
+      "Trade",
+      "ACV",
+      "Trade Retail",
+      "Business Manager",
+      "Est. Term",
+      "Front Gross",
+      "Back Gross",
+      "Total Gross",
+      "LAG",
+      "Source",
+      "Notes",
+      "Finance Status",
+      "Status",
+    ];
+    const sheet = [
+      header,
+      ["", "May 31", "Carryover", "M", "Ron", "Rogue", "S1", "3", "", "", "", "BM", "72", "$100", "$200", "$300", "", "", "", "", "POSTED"],
+      ["", "Jul 2", "JulyDeal", "M", "MADDY", "Sentra", "S2", "4", "", "", "", "BM", "72", "$10", "$20", "$30", "", "", "", "", "POSTED"],
+    ];
+
+    const month = parseSalesSheetForMonth(sheet, "sales", 7, 2026);
+    expect(month.rows).toHaveLength(2);
+    expect(month.rows.map((d) => d.salesperson).sort()).toEqual(["MADDY", "Ron"]);
+  });
 });
+

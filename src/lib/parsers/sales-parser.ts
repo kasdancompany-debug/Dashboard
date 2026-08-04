@@ -8,7 +8,6 @@ import {
   hasAnyKeyword,
   isEmptyRow,
   nowIso,
-  calendarPartsFromDateKey,
   parseCurrency,
   parseDateLike,
   parseNumber,
@@ -154,18 +153,17 @@ export function parseSalesSheetForMonth(
   month: number,
   year: number,
 ) {
+  // Rows are already loaded from the resolved month tab (e.g. JULY 2026).
+  // Trust the tab as source of truth — do not re-filter by Date (carryovers stay on the month they were logged).
   const base = parseSalesSheet(rows, sourceSheet);
-  const monthRows = base.data.filter((deal) => {
-    const parts = calendarPartsFromDateKey(deal.date);
-    return Boolean(parts && parts.year === year && parts.month === month);
-  });
-  const deliveredRows = monthRows.filter((deal) => deal.status === "delivered");
+  const tabRows = base.data;
+  const deliveredRows = tabRows.filter((deal) => deal.status === "delivered");
   const warnings = [...base.dataQualityIssues];
-  if (!monthRows.length) {
-    warnings.push(`No sales rows matched selected month ${year}-${String(month).padStart(2, "0")}.`);
+  if (!tabRows.length) {
+    warnings.push(`No sales rows found on selected month tab ${year}-${String(month).padStart(2, "0")}.`);
   }
-  if (monthRows.length && !deliveredRows.length) {
-    warnings.push(`No delivered sales deals found for selected month ${year}-${String(month).padStart(2, "0")}.`);
+  if (tabRows.length && !deliveredRows.length) {
+    warnings.push(`No closed (posted/sold/delivered) sales deals found on selected month tab ${year}-${String(month).padStart(2, "0")}.`);
   }
   const frontGross = deliveredRows.reduce((sum, d) => sum + d.frontGross, 0);
   const backGross = deliveredRows.reduce((sum, d) => sum + d.backGross, 0);

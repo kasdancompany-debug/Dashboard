@@ -3,7 +3,6 @@ import type { ForecastTrendItem } from "@/src/lib/parsers/forecast-parser";
 import type { SourceHealth } from "@/src/lib/velocity/engine/types";
 import { resolveDepartmentForecastTotal, resolveForecastTargetForLine } from "@/src/lib/velocity/monthly-gross/forecast-line-targets";
 import type { DeptGrossSubLineMetrics, DeptGrossSubLineMetricsMap } from "@/src/lib/parsers/dept-summary-metrics";
-import { calendarPartsFromDateKey } from "@/src/lib/parsers/parse-utils";
 import type { SalesGrossSubLineMetrics, SalesGrossTopMetricsMap } from "@/src/lib/parsers/sales-gross-top-metrics";
 import type {
   BestWorstTrackingLine,
@@ -525,10 +524,8 @@ export function buildMonthlyGrossTracking(input: MonthlyGrossEngineInput): Month
     resolveDepartmentForecastTotal("Sales", fc) ??
     (safe(input.sales.summary?.targetGross) || safe(input.targets?.Sales));
 
-  const monthlySalesDeals = input.sales.data.filter((deal) => {
-    const parts = calendarPartsFromDateKey(deal.date);
-    return Boolean(parts && parts.year === year && parts.month === month && deal.status === "delivered");
-  });
+  // Deals are already scoped to the selected Daily Log month tab in live data.
+  const monthlySalesDeals = input.sales.data.filter((deal) => deal.status === "delivered");
 
   const salesGrossMetrics = input.sales.summary?.grossLineMetrics;
   const salesFrontGross = monthlySalesDeals.reduce((sum, d) => sum + safe(d.frontGross), 0);

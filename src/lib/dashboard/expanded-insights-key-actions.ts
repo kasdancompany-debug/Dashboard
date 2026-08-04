@@ -1,5 +1,4 @@
 import type { PerformanceMeetingActionItem } from "@/src/lib/parsers/performance-meeting-action-items-parser";
-import { calendarPartsFromDateKey } from "@/src/lib/parsers/parse-utils";
 import type { SalesDeal } from "@/src/lib/types/dealership";
 import type { MonthlyGrossTracking } from "@/src/lib/velocity/monthly-gross/types";
 
@@ -94,20 +93,10 @@ function inferExpectedImpact(action: ExpandedInsightsKeyAction): string {
   return "Strengthens month-end gross execution";
 }
 
-function parseMonthKey(key: string): { year: number; month: number } | null {
-  const [y, m] = key.split("-").map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return null;
-  return { year: y, month: m };
-}
-
-function dealsForMonth(deals: SalesDeal[], reportingMonthKey: string): SalesDeal[] {
-  const parsed = parseMonthKey(reportingMonthKey);
-  if (!parsed) return deals;
-  const { year, month } = parsed;
-  return deals.filter((d) => {
-    const parts = calendarPartsFromDateKey(d.date);
-    return Boolean(parts && parts.year === year && parts.month === month);
-  });
+function dealsForMonth(deals: SalesDeal[], _reportingMonthKey: string): SalesDeal[] {
+  // Live sales deals are already scoped to the selected Daily Log month tab (including carryovers).
+  void _reportingMonthKey;
+  return deals;
 }
 
 function moneyAbs(n: number) {
