@@ -18,6 +18,7 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Trophy,
   Zap,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ import type { VelocityData } from "@/src/lib/velocity/get-velocity-data";
 import type { BestWorstTrackingLine, DepartmentGrossTracking, MonthlyGrossDepartment } from "@/src/lib/velocity/monthly-gross/types";
 import type { ExpandedInsightsKeyAction, KeyActionStatus } from "@/src/lib/dashboard/expanded-insights-key-actions";
 import type { OpportunityRadarBundle, OpportunityRadarItem } from "@/src/lib/dashboard/opportunity-radar";
+import type { SalesLeaderboardRow } from "@/src/lib/dashboard/sales-leaderboard";
 import {
   ExecSection,
   gapTone,
@@ -573,6 +575,88 @@ function KeyActionsDigest({ items }: { items: VelocityData["keyActions"] }) {
   );
 }
 
+function SalesLeaderboardSection({ rows }: { rows: SalesLeaderboardRow[] }) {
+  if (!rows.length) {
+    return (
+      <ExecSection>
+        <p className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+          <Trophy className="h-3.5 w-3.5 text-emerald-400/90" aria-hidden />
+          Sales leaderboard
+        </p>
+        <p className="text-[14px] leading-relaxed text-slate-500">
+          No salesperson deals found for this month in the Daily Log.
+        </p>
+      </ExecSection>
+    );
+  }
+
+  const leader = rows[0];
+
+  return (
+    <ExecSection>
+      <p className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+        <Trophy className="h-3.5 w-3.5 text-emerald-400/90" aria-hidden />
+        Sales leaderboard
+      </p>
+      <p className="mb-4 text-[13px] text-slate-400">
+        Ranked by total gross from the Daily Log <span className="font-medium text-slate-300">Salesperson</span> column.
+        {leader ? (
+          <>
+            {" "}
+            Leader: <span className="font-semibold text-emerald-300">{leader.name}</span> at {money(leader.totalGross)}.
+          </>
+        ) : null}
+      </p>
+
+      <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/20">
+        <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
+          <thead>
+            <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <th className="px-3 py-2.5">#</th>
+              <th className="px-3 py-2.5">Salesperson</th>
+              <th className="px-3 py-2.5 text-right">Units</th>
+              <th className="px-3 py-2.5 text-right">Total Gross</th>
+              <th className="px-3 py-2.5 text-right">Per Copy</th>
+              <th className="px-3 py-2.5 text-right">Front</th>
+              <th className="px-3 py-2.5 text-right">Back</th>
+              <th className="px-3 py-2.5 text-right">New / Used</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const isLeader = row.rank === 1;
+              return (
+                <tr
+                  key={`${row.rank}-${row.name}`}
+                  className={cn(
+                    "border-t border-white/[0.06]",
+                    isLeader ? "bg-emerald-500/10" : "hover:bg-white/[0.03]",
+                  )}
+                >
+                  <td className="px-3 py-2.5 font-mono text-slate-400">{row.rank}</td>
+                  <td className={cn("px-3 py-2.5 font-semibold", isLeader ? "text-emerald-100" : "text-white")}>
+                    {row.name}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-slate-200">{row.units}</td>
+                  <td className={cn("px-3 py-2.5 text-right font-mono tabular-nums font-semibold", isLeader ? "text-emerald-200" : "text-white")}>
+                    {money(row.totalGross)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-slate-300">{money(row.perCopy)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-slate-400">{money(row.frontGross)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-slate-400">{money(row.backGross)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-slate-400">
+                    {row.newUnits}/{row.usedUnits}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </ExecSection>
+  );
+}
+
 export type LiveDashboardExpandedInsightsProps = {
   worst: BestWorstTrackingLine | null;
   best: BestWorstTrackingLine | null;
@@ -580,6 +664,7 @@ export type LiveDashboardExpandedInsightsProps = {
   operationalSignals: { text: string; dot: SignalDot }[];
   opportunityRadar: VelocityData["opportunityRadar"];
   keyActions: VelocityData["keyActions"];
+  salesLeaderboard: VelocityData["salesLeaderboard"];
   sourceLineage: VelocityData["sourceLineage"];
   departmentByName: Map<string, DepartmentGrossTracking | undefined>;
 };
@@ -591,6 +676,7 @@ export function LiveDashboardExpandedInsights({
   operationalSignals,
   opportunityRadar,
   keyActions,
+  salesLeaderboard,
   sourceLineage,
   departmentByName,
 }: LiveDashboardExpandedInsightsProps) {
@@ -621,6 +707,8 @@ export function LiveDashboardExpandedInsights({
         </p>
         <SignalChips items={operationalSignals} />
       </ExecSection>
+
+      <SalesLeaderboardSection rows={salesLeaderboard ?? []} />
 
       <OpportunityRadarSection radar={opportunityRadar ?? { items: [], departmentTakeaways: [], summaryLine: "" }} />
 

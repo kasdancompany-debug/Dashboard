@@ -213,6 +213,7 @@ export function LiveDashboardViewV2() {
             operationalSignals={operationalSignals}
             opportunityRadar={data.opportunityRadar}
             keyActions={data.keyActions}
+            salesLeaderboard={data.salesLeaderboard}
             sourceLineage={data.sourceLineage}
             departmentByName={departmentByName}
           />

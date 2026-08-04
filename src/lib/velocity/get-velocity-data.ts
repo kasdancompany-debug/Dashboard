@@ -2,6 +2,7 @@ import "server-only";
 
 import { buildExpandedInsightsKeyActions, type ExpandedInsightsKeyAction } from "@/src/lib/dashboard/expanded-insights-key-actions";
 import { buildOpportunityRadar, type OpportunityRadarBundle } from "@/src/lib/dashboard/opportunity-radar";
+import { buildSalesLeaderboard, type SalesLeaderboardRow } from "@/src/lib/dashboard/sales-leaderboard";
 import type { SinceYesterdaySnapshot } from "@/src/lib/dashboard/since-yesterday";
 import { getLiveDataset, type LiveDataset } from "@/src/lib/live/live-data";
 import type { AccountabilityItem, AtRiskDeal, DepartmentHealth } from "@/src/lib/profit-engine/types";
@@ -70,6 +71,8 @@ export type VelocityData = {
   };
   /** Prioritized actions grounded in deal Notes + live metrics (Expanded insights). */
   keyActions: ExpandedInsightsKeyAction[];
+  /** Salesperson ranking from Daily Log Salesperson column (Expanded insights). */
+  salesLeaderboard: SalesLeaderboardRow[];
   /** Top 3 recovery opportunities for Opportunity Radar (Expanded insights). */
   opportunityRadar: OpportunityRadarBundle;
   /** Optional prior-day snapshot when daily history storage is enabled. */
@@ -301,6 +304,8 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     staleWarnings: sourceIntel.sourceHealth.staleDataWarnings ?? [],
   });
 
+  const salesLeaderboard = buildSalesLeaderboard(normalized.salesDeals);
+
   return {
     lastSynced: normalized.pipeline.sourceHealth.lastSynced,
     timeline: {
@@ -326,6 +331,7 @@ export async function getVelocityData(options?: { reportingMonth?: string | null
     trendSignals: toTrendSignals(meetingBriefing),
     meetingBriefing,
     keyActions,
+    salesLeaderboard,
     opportunityRadar,
     ...(options?.includeNormalized ? { normalized } : {}),
   };
